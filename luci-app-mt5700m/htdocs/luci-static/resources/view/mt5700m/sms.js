@@ -136,8 +136,8 @@ return view.extend({
 		reader.onerror=function(){ui.addNotification(null,E('p',{},_('The selected history file could not be read.')),'danger');};reader.readAsText(file);
 	},
 	load: function() { return Promise.all([
-		fs.exec('/usr/sbin/mt5700m-at',['sms-list']).then(function(res){return res.stdout||'';},function(){return '';}),
-		fs.exec('/usr/sbin/mt5700m-at',['sms-info']).then(function(res){return res.stdout||'';},function(){return '';})
+		fs.exec('/usr/sbin/mt5700m-read',['sms-list']).then(function(res){return res.stdout||'';},function(){return '';}),
+		fs.exec('/usr/sbin/mt5700m-read',['sms-info']).then(function(res){return res.stdout||'';},function(){return '';})
 	]); },
 	styleNode: function(){return E('style',{},[
 		'.mt-sms{max-width:1120px;margin:0 auto}.mt-sms-hero{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:21px 23px;border-radius:14px;background:linear-gradient(135deg,#173550,#17616c);color:#fff;margin-bottom:15px}.mt-sms-hero h2{color:#fff;margin:0 0 5px}.mt-sms-hero p{margin:0;color:#c8e0e3}.mt-sms-hero-actions{display:flex;gap:8px}.mt-sms-hero .btn{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.35);color:#fff}',

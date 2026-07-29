@@ -2,6 +2,7 @@
 
 CONFIG='mt5700m.settings'
 USB_HELPER="${MT5700M_USB_HELPER:-/usr/share/mt5700m/usb.sh}"
+CELL_SCAN_DIR="${MT5700M_CELL_SCAN_DIR:-/tmp/mt5700m-cellscan}"
 
 [ -r "${USB_HELPER}" ] && . "${USB_HELPER}"
 
@@ -158,7 +159,9 @@ at_ubus_cmd() {
 	json_add_string at_cmd "${command}"
 	payload="$(json_dump)"
 
-	result="$(ubus call at-daemon sendat "${payload}" 2>/dev/null)" || return 1
+	# ubus itself otherwise uses a much shorter default timeout than the modem
+	# command. Cell scan is documented to need up to two minutes.
+	result="$(ubus -t "$((timeout_s + 5))" call at-daemon sendat "${payload}" 2>/dev/null)" || return 1
 	status="$(printf '%s' "${result}" | jsonfilter -e '@.status' 2>/dev/null)"
 	[ "${status}" = "success" ] || return 1
 
@@ -577,7 +580,7 @@ print_signal() {
 	# NR=RSRP,SINR,RSRQ; LTE=RSSI,RSRP,SINR,RSRQ; WCDMA=RSSI,RSCP,ECIO.
 	printf '%s\n' "${raw}" | awk -F, '
 		function clean(value) {
-			gsub(/[[:space:]\r\"]/, "", value)
+			gsub(/[[:space:]\r"]/, "", value)
 			return value
 		}
 		function valid(value) { return value ~ /^[0-9]+$/ && value != 255 }
@@ -668,7 +671,7 @@ print_subscriber_number() {
 	number="$(printf '%s\n' "${raw}" | awk -F, '
 		/^\+CNUM:/ {
 			value = $2
-			gsub(/[[:space:]\r\"]/, "", value)
+			gsub(/[[:space:]\r"]/, "", value)
 			if (value ~ /^\+?[0-9]+$/ && length(value) >= 5) {
 				print value
 				exit
@@ -730,8 +733,8 @@ print_subscription_rate() {
 			line = $0
 			sub(/^\^DSAMBR:[[:space:]]*/, "", line)
 			n = split(line, field, ",")
-			gsub(/[[:space:]\r\"]/, "", field[2])
-			gsub(/[[:space:]\r\"]/, "", field[3])
+			gsub(/[[:space:]\r"]/, "", field[2])
+			gsub(/[[:space:]\r"]/, "", field[3])
 			if (n >= 3 && field[2] ~ /^[0-9]+([.][0-9]+)?$/ && field[3] ~ /^[0-9]+([.][0-9]+)?$/) {
 				printf "ambr_down_mbps=%.1f\n", field[2] / 1000
 				printf "ambr_up_mbps=%.1f\n", field[3] / 1000
@@ -779,7 +782,7 @@ print_carrier_aggregation() {
 		section == "hfreq" && /^\^HFREQINFO:/ {
 			line = $0
 			sub(/^\^HFREQINFO:[[:space:]]*/, "", line)
-			gsub(/[[:space:]\r\"]/, "", line)
+			gsub(/[[:space:]\r"]/, "", line)
 			n = split(line, field, ",")
 			rat = field[2]
 			if (rat == "7") {
@@ -817,7 +820,7 @@ print_carrier_aggregation() {
 		section == "cascell" && /^\^CASCELLINFO:/ {
 			line = $0
 			sub(/^\^CASCELLINFO:[[:space:]]*/, "", line)
-			gsub(/[[:space:]\r\"]/, "", line)
+			gsub(/[[:space:]\r"]/, "", line)
 			n = split(line, field, ",")
 			if (n < 12) next
 			for (i = 1; i <= 12; i++) if (field[i] !~ /^-?[0-9]+$/) next
@@ -944,7 +947,6 @@ PDP contexts|AT+CGDCONT?
 PDP activation|AT+CGACT?
 Data session|AT^NDISSTATQRY?
 Detailed sessions|AT^DCONNSTAT?
-Direct IP|AT^SETDIRECTIP?
 IPv4 lease|AT^DHCP?
 IPv6 lease|AT^DHCPV6?
 IP capability|AT^IPV6CAP?
@@ -956,8 +958,7 @@ PDP address|AT+CGPADDR=1'
 			items='Auto dial|AT^SETAUTODIAL?
 Interface mode|AT^TDCFG?
 PDP contexts|AT+CGDCONT?
-PDP activation|AT+CGACT?
-Direct IP|AT^SETDIRECTIP?'
+PDP activation|AT+CGACT?'
 			;;
 		session)
 			items='Data session|AT^NDISSTATQRY?
@@ -1132,6 +1133,173 @@ set_5g_access_mode() {
 	return "${rc}"
 }
 
+cell_scan_lock_active() {
+	local raw state
+
+	raw="$(at_cmd 'AT^LTEFREQLOCK?' || true)"
+	state="$(printf '%s\n' "${raw}" | first_match 's/^\^LTEFREQLOCK:[[:space:]]*//p' | clean_value | cut -d, -f1)"
+	if [ -n "${state}" ] && [ "${state}" != '0' ]; then
+		echo "LTE frequency or cell lock is active." >&2
+		return 0
+	fi
+
+	raw="$(at_cmd 'AT^NRFREQLOCK?' || true)"
+	state="$(printf '%s\n' "${raw}" | first_match 's/^\^NRFREQLOCK:[[:space:]]*//p' | clean_value | cut -d, -f1)"
+	if [ -n "${state}" ] && [ "${state}" != '0' ]; then
+		echo "5G NR frequency or cell lock is active." >&2
+		return 0
+	fi
+
+	return 1
+}
+
+run_cell_scan() {
+	local previous_timeout raw rc restore_registration
+
+	previous_timeout="${timeout_s}"
+	restore_registration=0
+	timeout_s=150
+
+	restore_cell_scan_registration() {
+		if [ "${restore_registration}" = '1' ]; then
+			timeout_s=20
+			at_cmd 'AT+COPS=0' >/dev/null 2>&1 || true
+			timeout_s=150
+		fi
+	}
+
+	trap 'restore_cell_scan_registration' EXIT HUP INT TERM
+
+	if cell_scan_lock_active; then
+		echo "Remove the active frequency or cell lock before scanning." >&2
+		timeout_s="${previous_timeout}"
+		trap - EXIT HUP INT TERM
+		return 2
+	fi
+
+	# The vendor sequence requires deregistration before CELLSCAN. Mark the
+	# registration for restoration before issuing COPS=2, since a transport
+	# timeout can still leave the modem deregistered.
+	restore_registration=1
+	if ! at_cmd 'AT+COPS=2' >/dev/null; then
+		restore_cell_scan_registration
+		restore_registration=0
+		timeout_s="${previous_timeout}"
+		trap - EXIT HUP INT TERM
+		echo "Unable to leave the current network for cell scan." >&2
+		return 1
+	fi
+
+	raw="$(at_cmd 'AT^CELLSCAN=3')"
+	rc=$?
+	restore_cell_scan_registration
+	restore_registration=0
+	timeout_s="${previous_timeout}"
+	trap - EXIT HUP INT TERM
+
+	[ -n "${raw}" ] && printf '%s\n' "${raw}"
+	if [ "${rc}" -ne 0 ]; then
+		echo "Cell scan did not complete." >&2
+		return "${rc}"
+	fi
+	if ! printf '%s\n' "${raw}" | grep -q '^\^CELLSCAN:'; then
+		echo "The modem returned no cell scan records." >&2
+		return 1
+	fi
+
+	return 0
+}
+
+cell_scan_prepare_dir() {
+	umask 077
+	mkdir -p "${CELL_SCAN_DIR}" || return 1
+	chmod 0700 "${CELL_SCAN_DIR}" 2>/dev/null || true
+}
+
+cell_scan_worker() {
+	local rc
+
+	cell_scan_prepare_dir || exit 1
+	[ -d "${CELL_SCAN_DIR}/lock" ] || mkdir "${CELL_SCAN_DIR}/lock" 2>/dev/null || exit 2
+	trap 'rm -f "${CELL_SCAN_DIR}/pid"; rmdir "${CELL_SCAN_DIR}/lock" 2>/dev/null || true' EXIT HUP INT TERM
+	printf '%s\n' "$$" > "${CELL_SCAN_DIR}/pid"
+	printf '%s\n' 'running' > "${CELL_SCAN_DIR}/state"
+	: > "${CELL_SCAN_DIR}/result"
+	: > "${CELL_SCAN_DIR}/error"
+
+	if run_cell_scan > "${CELL_SCAN_DIR}/result" 2> "${CELL_SCAN_DIR}/error"; then
+		printf '%s\n' 'done' > "${CELL_SCAN_DIR}/state"
+		rc=0
+	else
+		rc=$?
+		printf '%s\n' 'error' > "${CELL_SCAN_DIR}/state"
+	fi
+
+	exit "${rc}"
+}
+
+cell_scan_start() {
+	local pid state
+
+	cell_scan_prepare_dir || return 1
+	pid="$(cat "${CELL_SCAN_DIR}/pid" 2>/dev/null || true)"
+	state="$(cat "${CELL_SCAN_DIR}/state" 2>/dev/null || true)"
+	if [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null; then
+		echo "state=${state:-running}"
+		echo "pid=${pid}"
+		return 0
+	fi
+
+	rm -rf "${CELL_SCAN_DIR}/lock" 2>/dev/null
+	if ! mkdir "${CELL_SCAN_DIR}/lock" 2>/dev/null; then
+		echo 'state=running'
+		return 0
+	fi
+	rm -f "${CELL_SCAN_DIR}/pid" "${CELL_SCAN_DIR}/result" "${CELL_SCAN_DIR}/error"
+	printf '%s\n' 'starting' > "${CELL_SCAN_DIR}/state"
+	if command -v nohup >/dev/null 2>&1; then
+		nohup "$0" cellscan-worker >/dev/null 2>&1 </dev/null &
+	else
+		"$0" cellscan-worker >/dev/null 2>&1 </dev/null &
+	fi
+	pid=$!
+	if ! kill -0 "${pid}" 2>/dev/null; then
+		rmdir "${CELL_SCAN_DIR}/lock" 2>/dev/null || true
+		printf '%s\n' 'error' > "${CELL_SCAN_DIR}/state"
+		return 1
+	fi
+	printf '%s\n' "${pid}" > "${CELL_SCAN_DIR}/pid"
+	echo 'state=starting'
+	echo "pid=${pid}"
+}
+
+cell_scan_status() {
+	local state pid
+
+	state="$(cat "${CELL_SCAN_DIR}/state" 2>/dev/null || echo idle)"
+	pid="$(cat "${CELL_SCAN_DIR}/pid" 2>/dev/null || true)"
+	if { [ "${state}" = 'starting' ] || [ "${state}" = 'running' ]; } &&
+		{ [ -z "${pid}" ] || ! kill -0 "${pid}" 2>/dev/null; }; then
+		state=error
+		echo 'message=Cell scan worker stopped unexpectedly.'
+	fi
+
+	echo "state=${state}"
+	[ -n "${pid}" ] && echo "pid=${pid}"
+}
+
+cell_scan_result() {
+	local state
+
+	state="$(cat "${CELL_SCAN_DIR}/state" 2>/dev/null || echo idle)"
+	echo "state=${state}"
+	[ -s "${CELL_SCAN_DIR}/result" ] && cat "${CELL_SCAN_DIR}/result"
+	if [ -s "${CELL_SCAN_DIR}/error" ]; then
+		echo '===== Error ====='
+		cat "${CELL_SCAN_DIR}/error"
+	fi
+}
+
 case "${1:-status}" in
 	status)
 		# Keep LuCI status below rpcd's execution timeout even if an optional
@@ -1187,7 +1355,19 @@ case "${1:-status}" in
 		print_network_info
 		;;
 	cellscan)
-		at_cmd 'AT^CELLSCAN=3'
+		run_cell_scan
+		;;
+	cellscan-start)
+		cell_scan_start
+		;;
+	cellscan-status)
+		cell_scan_status
+		;;
+	cellscan-result)
+		cell_scan_result
+		;;
+	cellscan-worker)
+		cell_scan_worker
 		;;
 	sms-list)
 		print_sms_list
@@ -1353,10 +1533,6 @@ case "${1:-status}" in
 				case "${1:-}" in 0|1) dss_rate="${1}" ;; *) exit 64 ;; esac
 				case "${2:-}" in 0|1) dss_dmrs="${2}" ;; *) exit 64 ;; esac
 				at_cmd "AT^NRRCCAPCFG=5,${dss_rate},${dss_dmrs}"
-				;;
-			direct-ip)
-				shift
-				case "${1:-}" in 0|1) at_cmd "AT^SETDIRECTIP=${1}" ;; *) exit 64 ;; esac
 				;;
 			*)
 				exit 64

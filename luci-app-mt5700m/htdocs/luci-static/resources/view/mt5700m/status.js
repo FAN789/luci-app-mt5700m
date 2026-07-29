@@ -42,8 +42,8 @@ return view.extend({
 	load: function() {
 		return callManagerStatus().catch(function() { return {}; }).then(function(manager) {
 			return Promise.all([
-				fs.exec('/usr/sbin/mt5700m-at', [ 'status' ]).catch(function(err) { return { stdout:'', stderr:err.message || String(err) }; }),
-				fs.exec('/usr/sbin/mt5700m-at', [ 'advanced', 'session' ]).catch(function(err) { return { stdout:'', stderr:err.message || String(err) }; }),
+				fs.exec('/usr/sbin/mt5700m-read', [ 'status' ]).catch(function(err) { return { stdout:'', stderr:err.message || String(err) }; }),
+				fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'session' ]).catch(function(err) { return { stdout:'', stderr:err.message || String(err) }; }),
 				callTraffic().catch(function() { return { interfaces:[] }; })
 			]).then(function(results) {
 				return { native:results[0], session:results[1], traffic:results[2], manager:manager };
@@ -187,7 +187,7 @@ return view.extend({
 
 	trafficPanel: function(report, interfaceName) {
 		var iface = (report.interfaces || []).filter(function(item) { return item.name === interfaceName; })[0] ||
-			(report.interfaces || []).filter(function(item) { return item.name === 'eth2'; })[0] || { traffic:{} };
+			(report.interfaces || [])[0] || { traffic:{} };
 		var traffic = iface.traffic || {}, days = sortedTraffic(traffic.day, false), months = sortedTraffic(traffic.month, true);
 		var today = currentTraffic(days, false), month = currentTraffic(months, true), lifetime = traffic.total || {};
 		var recentDays = days.slice(-7).reverse(), maximum = Math.max.apply(Math, recentDays.map(trafficTotal).concat([ 1 ]));
@@ -233,7 +233,7 @@ return view.extend({
 				E('div', { 'class':'mt5700m-hero-side' }, [ E('div', { 'class':'mt5700m-status' + (connected ? ' online' : '') }, [ E('span', { 'class':'mt5700m-dot' }), connected ? _('Connected') : reachable ? _('Module online') : _('Unavailable') ]), E('button', { 'class':'btn mt5700m-refresh', 'click':function() { window.location.reload(); } }, _('Refresh')) ])
 			]),
 			E('div', { 'class':'mt5700m-focus-grid' }, [ this.signalCard(data), this.carrierCard(carrierInfo), this.addressCard(session) ]),
-			this.trafficPanel(res.traffic || {}, data.network_interface || 'eth2'),
+			this.trafficPanel(res.traffic || {}, data.network_interface || ''),
 			E('div', { 'class':'mt5700m-shortcuts' }, [
 				this.shortcut(_('Mobile data'), _('APN, dialing, IP details and session counters'), 'admin/modem/mt5700m/connection'),
 				this.shortcut(_('Radio and Cells'), _('Bands, cells, radio policy and diagnostics'), 'admin/modem/mt5700m/network'),

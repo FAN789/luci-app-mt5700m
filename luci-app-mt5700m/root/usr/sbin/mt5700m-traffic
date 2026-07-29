@@ -1,6 +1,6 @@
 #!/bin/sh
 
-INTERFACES="${MT5700M_TRAFFIC_INTERFACES:-eth2}"
+INTERFACES="${MT5700M_TRAFFIC_INTERFACES:-}"
 SYS_CLASS_NET="${MT5700M_TRAFFIC_SYS_CLASS_NET:-/sys/class/net}"
 RUNTIME_DIR="${MT5700M_TRAFFIC_RUNTIME_DIR:-/tmp/mt5700m-traffic}"
 HISTORY_FILE="${MT5700M_TRAFFIC_HISTORY_FILE:-/etc/mt5700m/traffic-history}"
@@ -14,7 +14,35 @@ valid_number() {
 	case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac
 }
 
+resolve_interfaces() {
+	local configured detected
+	[ -z "${MT5700M_TRAFFIC_INTERFACES:-}" ] || {
+		INTERFACES="${MT5700M_TRAFFIC_INTERFACES}"
+		return 0
+	}
+	INTERFACES=''
+	configured="$(uci -q get network.MT5700M.device 2>/dev/null ||
+		uci -q get network.MT5700M.ifname 2>/dev/null || true)"
+	case "${configured}" in
+		''|'@'*) ;;
+		*) [ -d "${SYS_CLASS_NET}/${configured}" ] && INTERFACES="${configured}" ;;
+	esac
+	if [ -z "${INTERFACES}" ] && [ -r /usr/share/mt5700m/usb.sh ]; then
+		. /usr/share/mt5700m/usb.sh
+		detected="$(mt5700m_netdev 2>/dev/null || true)"
+		[ -z "${detected}" ] || INTERFACES="${detected}"
+	fi
+	if [ -z "${INTERFACES}" ]; then
+		for detected in "${SYS_CLASS_NET}"/eth2 "${SYS_CLASS_NET}"/wwan0 "${SYS_CLASS_NET}"/usb0; do
+			[ -d "${detected}" ] || continue
+			INTERFACES="${detected##*/}"
+			break
+		done
+	fi
+}
+
 ensure_history() {
+	resolve_interfaces
 	mkdir -p "${RUNTIME_DIR}" "${HISTORY_FILE%/*}"
 	if [ ! -f "${RUNTIME_FILE}" ]; then
 		if [ -s "${HISTORY_FILE}" ]; then
@@ -84,6 +112,7 @@ export_interface() {
 }
 
 export_json() {
+	resolve_interfaces
 	ensure_history
 	printf '%s' '{"interfaces":['
 	first=1
@@ -126,12 +155,14 @@ collect_interface() {
 }
 
 collect_daemon() {
+	resolve_interfaces
 	ensure_history
 	cycles=0
 	DIRTY=0
 	trap 'flush_history; exit 0' INT TERM
 
 	while :; do
+		resolve_interfaces
 		for netdev in ${INTERFACES}; do
 			collect_interface "${netdev}"
 		done
@@ -154,7 +185,8 @@ case "${1:-}" in
 	flush) flush_history ;;
 	update)
 		ensure_history
-		update_history "${2:-eth2}" "${3:-0}" "${4:-0}" "${5:-$(date +%Y-%m-%d)}" "${6:-$(date +%H:%M)}"
+		resolve_interfaces
+		update_history "${2:-${INTERFACES%% *}}" "${3:-0}" "${4:-0}" "${5:-$(date +%Y-%m-%d)}" "${6:-$(date +%H:%M)}"
 		;;
 	*)
 		printf 'Usage: %s {daemon|json|flush}\n' "$0" >&2

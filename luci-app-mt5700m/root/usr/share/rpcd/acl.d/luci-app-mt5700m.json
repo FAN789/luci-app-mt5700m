@@ -10,7 +10,7 @@
 				"network.device": [ "status" ]
 			},
 			"file": {
-				"/usr/sbin/mt5700m-at": [ "exec" ]
+				"/usr/sbin/mt5700m-read": [ "exec" ]
 			}
 		},
 		"write": {

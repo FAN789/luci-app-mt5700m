@@ -31,7 +31,7 @@ function subscriptionRate(value) {
 
 return view.extend({
 	load: function() {
-		return fs.exec('/usr/sbin/mt5700m-at', [ 'system' ]).catch(function(err) { return { stdout: '', stderr: err.message || String(err) }; });
+		return fs.exec('/usr/sbin/mt5700m-read', [ 'system' ]).catch(function(err) { return { stdout: '', stderr: err.message || String(err) }; });
 	},
 
 	styleNode: function() {

@@ -47,6 +47,42 @@ function countLines(text, prefix) {
 	return (text || '').split(/\n/).filter(function(line) { return line.indexOf(prefix) === 0; }).length;
 }
 
+function stateValue(raw) {
+	var match = String(raw || '').match(/^state=(.+)$/m);
+	return match ? match[1].trim() : '';
+}
+
+function parseCellScan(raw) {
+	var ratNames = { '1': 'UMTS', '2': 'LTE', '3': '5G NR' };
+	var scsNames = [ '15', '30', '60', '120', '240' ];
+
+	return String(raw || '').split(/\n/).filter(function(line) {
+		return /^\^CELLSCAN:\s*/.test(line);
+	}).map(function(line) {
+		var field = line.replace(/^\^CELLSCAN:\s*/, '').split(',').map(function(value) {
+			return value.trim().replace(/^"|"$/g, '');
+		});
+		var frequency = Number(field[2]);
+		var band = parseInt(field[4], 16);
+		var rsrp = /^-?\d+$/.test(field[11] || '') ? field[11] : '';
+		var rsrq = /^-?\d+$/.test(field[12] || '') ? (Number(field[12]) * 0.5).toFixed(1) : '';
+		var sinr = /^-?\d+$/.test(field[13] || '') ? (Number(field[13]) * 0.5).toFixed(1) : '';
+
+		return {
+			rat: ratNames[field[0]] || field[0] || '--',
+			plmn: field[1] || '--',
+			frequency: isFinite(frequency) ? (frequency / 1000).toFixed(1) : '--',
+			pci: field[3] || '--',
+			band: isFinite(band) ? 'B' + band : '--',
+			lac: field[5] ? '0x' + field[5].toUpperCase() : '--',
+			scs: scsNames[Number(field[10])] || '--',
+			rsrp: rsrp || '--',
+			rsrq: rsrq || '--',
+			sinr: sinr || '--'
+		};
+	});
+}
+
 function formatMcs(values) {
 	if (!values.length)
 		return '';
@@ -147,10 +183,10 @@ function parseServingCell(values) {
 return view.extend({
 	load: function() {
 		return Promise.all([
-			fs.exec('/usr/sbin/mt5700m-at', [ 'network' ]).catch(function(err) {
+			fs.exec('/usr/sbin/mt5700m-read', [ 'network' ]).catch(function(err) {
 				return { stdout: '', stderr: err.message || String(err) };
 			}),
-			fs.exec('/usr/sbin/mt5700m-at', [ 'advanced', 'radio' ]).catch(function(err) {
+			fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'radio' ]).catch(function(err) {
 				return { stdout: '', stderr: err.message || String(err) };
 			})
 		]);
@@ -180,6 +216,8 @@ return view.extend({
 			'.mt-freq-head{margin-top:20px;padding:19px 20px;border-radius:13px;background:linear-gradient(135deg,#f4f7fb,#f1f8f6);border:1px solid #dce7ee}.mt-freq-head h3{font-size:18px;margin:0 0 6px}.mt-freq-head p{margin:0;color:var(--text-color-medium,#68717d);font-size:12px}',
 			'.mt-freq-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}.mt-freq-card{padding:17px;border:1px solid var(--border-color-medium,#d9dde4);border-radius:13px;background:var(--background-color-high,#fff)}.mt-freq-card h4{margin:0 0 12px;font-size:14px}.mt-freq-field{margin:11px 0}.mt-freq-field label{display:block;font-size:12px;color:var(--text-color-medium,#6d7680);margin-bottom:5px}.mt-freq-field input,.mt-freq-field select{width:100%;box-sizing:border-box}.mt-freq-help{font-size:11px;color:var(--text-color-medium,#7b838c);margin-top:5px}.mt-freq-actions{display:flex;justify-content:flex-end;margin-top:14px}',
 			'.mt-band-card{padding:18px}.mt-band-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:14px}.mt-band-head h3{margin:0 0 4px;font-size:15px}.mt-band-head p{margin:0;color:var(--text-color-medium,#6d7680);font-size:11px;line-height:1.45}.mt-band-head .btn{flex:0 0 auto}.mt-band-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.mt-band-option{display:flex;align-items:center;gap:9px;min-height:40px;padding:7px 10px;border:1px solid var(--border-color-low,#e8ecf0);border-radius:9px;background:var(--background-color-low,#f8fafb);cursor:pointer;font-size:12px;transition:border-color .15s ease,background-color .15s ease}.mt-band-option:hover{border-color:#9cc5ee;background:#f1f7fd}.mt-band-option input{flex:0 0 auto;width:16px!important;height:16px;margin:0}.mt-band-apply{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:18px;padding:15px 18px}.mt-band-apply p{margin:0;color:var(--text-color-medium,#6d7680);font-size:11px;line-height:1.5}.mt-band-apply .btn{flex:0 0 auto}',
+			'.mt-scan-progress{text-align:center;padding:22px 12px}.mt-scan-spinner{display:inline-block;width:28px;height:28px;border:3px solid #d8e6f4;border-top-color:#2384d8;border-radius:50%;animation:mt-scan-spin .8s linear infinite}.mt-scan-progress p{margin:14px 0 0;color:var(--text-color-medium,#68717d)}@keyframes mt-scan-spin{to{transform:rotate(360deg)}}',
+			'.mt-scan-summary{margin:0 0 12px;color:var(--text-color-medium,#68717d);font-size:13px}.mt-scan-table-wrap{max-width:100%;overflow:auto;border:1px solid var(--border-color-medium,#d9dde4);border-radius:10px}.mt-scan-table{width:100%;border-collapse:collapse;white-space:nowrap;font-size:12px}.mt-scan-table th,.mt-scan-table td{padding:9px 11px;border-bottom:1px solid var(--border-color-low,#edf0f4);text-align:left}.mt-scan-table th{background:var(--background-color-low,#f5f8fa);font-weight:700}.mt-scan-table tr:last-child td{border-bottom:0}',
 			'@media(max-width:720px){.mt-net-hero{display:block}.mt-net-badge{margin-top:13px}.mt-net-metrics{grid-template-columns:1fr}.mt-net-grid,.mt-freq-grid{grid-template-columns:1fr}.mt-band-options{grid-template-columns:repeat(2,minmax(0,1fr))}.mt-band-apply{display:block}.mt-band-apply .btn{width:100%;margin-top:12px}}',
 			'@media(max-width:430px){.mt-band-head{display:block}.mt-band-head .btn{margin-top:10px}.mt-band-options{grid-template-columns:1fr}}'
 		].join(''));
@@ -195,6 +233,85 @@ return view.extend({
 			E('span', { 'class': 'mt-net-value' }, value || '--'),
 			value ? E('span', { 'class': 'mt-net-unit' }, unit) : null
 		]);
+	},
+
+	showCellScanResult: function(raw) {
+		var rows = parseCellScan(raw);
+		var content;
+
+		if (rows.length) {
+			content = E('div', {}, [
+				E('p', { 'class':'mt-scan-summary' }, _('%d nearby cells found. The modem has returned to automatic network selection.').format(rows.length)),
+				E('div', { 'class':'mt-scan-table-wrap' }, E('table', { 'class':'mt-scan-table' }, [
+					E('thead', {}, E('tr', {}, [
+						E('th', {}, _('Network')), E('th', {}, 'PLMN'), E('th', {}, _('Band')),
+						E('th', {}, _('Frequency')), E('th', {}, 'PCI'), E('th', {}, 'TAC / LAC'),
+						E('th', {}, 'SCS'), E('th', {}, 'RSRP'), E('th', {}, 'RSRQ'), E('th', {}, 'SINR')
+					])),
+					E('tbody', {}, rows.map(function(row) {
+						return E('tr', {}, [
+							E('td', {}, row.rat), E('td', {}, row.plmn), E('td', {}, row.band),
+							E('td', {}, row.frequency + ' MHz'), E('td', {}, row.pci), E('td', {}, row.lac),
+							E('td', {}, row.scs === '--' ? '--' : row.scs + ' kHz'),
+							E('td', {}, row.rsrp === '--' ? '--' : row.rsrp + ' dBm'),
+							E('td', {}, row.rsrq === '--' ? '--' : row.rsrq + ' dB'),
+							E('td', {}, row.sinr === '--' ? '--' : row.sinr + ' dB')
+						]);
+					}))
+				])),
+				E('details', { 'class':'mt-net-details', 'style':'margin-top:12px' }, [
+					E('summary', {}, _('Raw modem response')),
+					E('pre', { 'class':'mt-net-raw' }, raw)
+				])
+			]);
+		} else {
+			content = E('div', {}, [
+				E('div', { 'class':'alert-message warning' }, _('No valid cell records were returned.')),
+				E('pre', { 'class':'mt-net-raw' }, raw || _('No response.'))
+			]);
+		}
+
+		ui.showModal(_('Cell Scan'), [
+			content,
+			E('div', { 'class':'right', 'style':'margin-top:14px' }, E('button', { 'class':'btn', 'click':ui.hideModal }, _('Close')))
+		]);
+	},
+
+	startCellScan: function() {
+		var self = this;
+		var attempts = 0;
+
+		ui.showModal(_('Cell Scan'), E('div', { 'class':'mt-scan-progress' }, [
+			E('span', { 'class':'mt-scan-spinner', 'aria-hidden':'true' }),
+			E('p', {}, _('Scanning nearby cells. Mobile service is temporarily disconnected; this usually takes 1–2 minutes.'))
+		]));
+
+		function poll() {
+			return fs.exec('/usr/sbin/mt5700m-read', [ 'cellscan-status' ]).then(function(result) {
+				var state = stateValue(result.stdout);
+				if (state === 'done' || state === 'error') {
+					return fs.exec('/usr/sbin/mt5700m-read', [ 'cellscan-result' ]).then(function(scan) {
+						if (state === 'error')
+							throw new Error((scan.stdout || scan.stderr || _('Cell scan failed.')).replace(/^state=error\s*/m, '').trim());
+						self.showCellScanResult(scan.stdout || '');
+					});
+				}
+				if (++attempts >= 100)
+					throw new Error(_('Cell scan timed out. Automatic network selection has been requested; refresh the page after the modem reconnects.'));
+				return new Promise(function(resolve) {
+					window.setTimeout(function() { resolve(poll()); }, 2000);
+				});
+			});
+		}
+
+		return fs.exec('/usr/sbin/mt5700m-at', [ 'cellscan-start' ]).then(function() {
+			return poll();
+		}).catch(function(err) {
+			ui.showModal(_('Cell Scan'), [
+				E('div', { 'class':'alert-message danger' }, err.message || String(err)),
+				E('div', { 'class':'right' }, E('button', { 'class':'btn', 'click':ui.hideModal }, _('Close')))
+			]);
+		});
 	},
 
 	lockPanel: function(title, rat, currentType) {
@@ -310,7 +427,7 @@ return view.extend({
 		var diagnosticHost = E('div', { 'class':'mt-net-diagnostics' }, E('div', { 'class':'alert-message notice' }, _('Loading detailed radio diagnostics…')));
 		var self = this;
 		window.setTimeout(function() {
-			fs.exec('/usr/sbin/mt5700m-at', [ 'advanced', 'radio-diagnostics' ]).then(function(result) {
+			fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'radio-diagnostics' ]).then(function(result) {
 				dom.content(diagnosticHost, self.radioDiagnostics(result.stdout || ''));
 			}, function(err) {
 				dom.content(diagnosticHost, E('div', { 'class':'alert-message warning' }, err.message || String(err)));
@@ -411,10 +528,10 @@ return view.extend({
 				E('button', { 'class': 'btn cbi-button-action', 'click': function() { window.location.reload(); } }, _('Refresh status')),
 				E('button', { 'class': 'btn cbi-button', 'click': function() {
 					return ui.showModal(_('Confirm Action'), [
-						E('p', {}, _('Cell scan may take some time and can briefly increase modem load.')),
+						E('p', {}, _('Cell scan disconnects mobile service for about 1–2 minutes and restores automatic network selection afterwards. Active LTE or 5G NR frequency locks must be removed first.')),
 						E('div', { 'class': 'right' }, [ E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')), ' ', E('button', { 'class': 'btn cbi-button-apply', 'click': function() {
 							ui.hideModal();
-							fs.exec('/usr/sbin/mt5700m-at', [ 'cellscan' ]).then(function(scan) { ui.showModal(_('Cell Scan'), [ E('pre', { 'class': 'mt-net-raw' }, scan.stdout || _('No response.')), E('div', { 'class': 'right' }, E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Close'))) ]); });
+							return self.startCellScan();
 						} }, _('Continue')) ])
 					]);
 				} }, _('Cell Scan'))

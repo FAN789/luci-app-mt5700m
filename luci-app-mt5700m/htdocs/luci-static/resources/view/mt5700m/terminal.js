@@ -5,6 +5,10 @@
 'require mt5700m.controls as controls';
 
 return view.extend({
+	handleSave: null,
+	handleSaveApply: null,
+	handleReset: null,
+
 	styleNode: function() {
 		return E('style', {}, [
 			'.mt-terminal-hero{padding:22px 24px;border-radius:14px;background:linear-gradient(135deg,#202733,#313d4c);color:#fff;margin-bottom:16px}',

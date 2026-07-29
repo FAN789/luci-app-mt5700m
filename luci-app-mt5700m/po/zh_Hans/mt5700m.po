@@ -993,6 +993,36 @@ msgstr "FOTA 服务器地址"
 msgid "Initialize FOTA mode?"
 msgstr "初始化 FOTA 模式？"
 
+msgid "%d nearby cells found. The modem has returned to automatic network selection."
+msgstr "发现 %d 个附近小区，模组已恢复自动选网。"
+
+msgid "Band"
+msgstr "频段"
+
+msgid "Cell scan disconnects mobile service for about 1–2 minutes and restores automatic network selection afterwards. Active LTE or 5G NR frequency locks must be removed first."
+msgstr "小区扫描会断开移动网络约 1–2 分钟，完成后自动恢复选网；扫描前需要先解除 LTE 或 5G NR 锁频。"
+
+msgid "Cell scan failed."
+msgstr "小区扫描失败。"
+
+msgid "Cell scan timed out. Automatic network selection has been requested; refresh the page after the modem reconnects."
+msgstr "小区扫描超时。已请求恢复自动选网，请等待模组重新联网后刷新页面。"
+
+msgid "Frequency"
+msgstr "频率"
+
+msgid "Network"
+msgstr "网络制式"
+
+msgid "No valid cell records were returned."
+msgstr "模组未返回有效的小区记录。"
+
+msgid "Raw modem response"
+msgstr "模组原始响应"
+
+msgid "Scanning nearby cells. Mobile service is temporarily disconnected; this usually takes 1–2 minutes."
+msgstr "正在扫描附近小区。移动网络会暂时断开，通常需要 1–2 分钟。"
+
 msgid "Initialize FOTA"
 msgstr "初始化 FOTA"
 

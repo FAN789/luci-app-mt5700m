@@ -118,6 +118,15 @@ ensure_firewall_network() {
 	FIREWALL_CHANGED=1
 }
 
+remove_firewall_network() {
+	local network="$1" zone
+	zone="$(uci -q show firewall 2>/dev/null | sed -n "s/^\(firewall\.[^.]*\)\.name='wan'$/\1/p" | head -n 1)"
+	[ -n "${zone}" ] || return 0
+	list_contains "${zone}.network" "${network}" || return 0
+	uci -q del_list "${zone}.network=${network}" || return 1
+	FIREWALL_CHANGED=1
+}
+
 effective_policy() {
 	local mode owner configured_metric
 	mode="$(uci -q get h5000m_netmode.settings.mode 2>/dev/null || true)"
@@ -135,7 +144,11 @@ effective_policy() {
 		modem) IPV6_DEFAULT=1; IPV6_AUTO=1 ;;
 		wan) IPV6_DEFAULT=0; IPV6_AUTO=0 ;;
 		*)
-			case "${mode}" in modem_first|modem_only) IPV6_DEFAULT=1; IPV6_AUTO=1 ;; *) IPV6_DEFAULT=0; IPV6_AUTO=0 ;; esac
+			case "${mode}" in
+				modem_first|modem_only) IPV6_DEFAULT=1; IPV6_AUTO=1 ;;
+				wan_first|wan_only) IPV6_DEFAULT=0; IPV6_AUTO=0 ;;
+				*) IPV6_DEFAULT=1; IPV6_AUTO=1 ;;
+			esac
 			;;
 	esac
 }
@@ -177,6 +190,7 @@ ensure_network() {
 
 	if [ "${pdp_type}" = 'ip' ]; then
 		delete_if_present "network.${INTERFACE6}"
+		remove_firewall_network "${INTERFACE6}"
 	else
 		set_if_changed "network.${INTERFACE6}" 'interface'
 		set_if_changed "network.${INTERFACE6}.managed_by" 'mt5700m'

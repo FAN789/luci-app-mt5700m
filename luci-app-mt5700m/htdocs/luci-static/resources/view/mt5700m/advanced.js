@@ -5,7 +5,7 @@
 
 return view.extend({
 	load: function() {
-		return fs.exec('/usr/sbin/mt5700m-at', [ 'advanced', 'hardware' ]).catch(function(err) {
+		return fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'hardware' ]).catch(function(err) {
 			return { stdout: '', stderr: err.message || String(err) };
 		});
 	},

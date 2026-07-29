@@ -64,8 +64,8 @@ return view.extend({
 				return Promise.all([
 					Promise.resolve(this.manager),
 					callDeviceStatus(this.manager.network || '').catch(function() { return {}; }),
-					fs.exec('/usr/sbin/mt5700m-at', [ 'advanced', 'connection-settings' ]).catch(function(err) { return { stdout: '', stderr:err.message || String(err) }; }),
-					fs.exec('/usr/sbin/mt5700m-at', [ 'advanced', 'session' ]).catch(function(err) { return { stdout: '', stderr:err.message || String(err) }; })
+					fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'connection-settings' ]).catch(function(err) { return { stdout: '', stderr:err.message || String(err) }; }),
+					fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'session' ]).catch(function(err) { return { stdout: '', stderr:err.message || String(err) }; })
 				]);
 			}, this));
 		}, this));
@@ -287,11 +287,6 @@ return view.extend({
 		var postRoute = controls.select(postRouteOptions, postRouteKnown ? postRouteValue : '');
 		postRoute.disabled = !postRouteKnown;
 		var dmz = E('input', { 'class':'cbi-input-text', 'placeholder':'192.168.8.100', 'value':dmzValue.indexOf('not cfg') < 0 ? dmzValue : '' });
-		var directIpValue = controls.pick(controls.section(moduleRaw, 'Direct IP'), /\^SETDIRECTIP:\s*(\d+)/, '');
-		var directIpKnown = directIpValue === '0' || directIpValue === '1';
-		var directIpOptions = directIpKnown ? [['0',_('Disabled')],['1',_('Enabled')]] : [['',_('Unavailable')]];
-		var directIp = controls.select(directIpOptions, directIpKnown ? directIpValue : '');
-		directIp.disabled = !directIpKnown;
 		var contexts = parseContexts(controls.section(moduleRaw, 'PDP contexts'), controls.section(moduleRaw, 'PDP activation'));
 		var pdpPanel = E('section', { 'class':'mtconn-pdp mt-ui-card' }, [
 			E('div', { 'class':'mtconn-pdp-head' }, [
@@ -331,11 +326,6 @@ return view.extend({
 					})
 				]),
 				controls.card(_('Inbound routing'), _('Optional module-side forwarding for devices connected behind the MT5700M data path.'), [
-					controls.row(_('IP passthrough'), directIp),
-					E('div', { 'class':'mt-control-note' }, directIpKnown ? _('IP passthrough is an original-manager compatibility feature. Keep it disabled when OpenWrt owns the mobile connection.') : _('This MT5700M firmware does not expose a readable IP passthrough setting. The control is disabled to prevent false success reports.')),
-					directIpKnown ? controls.action(_('Apply IP passthrough'), function() {
-						controls.confirmRun(_('Change IP passthrough'), _('Changing passthrough can remove the module management address and interrupt connectivity.'), [ 'advanced-set', 'direct-ip', directIp.value ], true);
-					}) : null,
 					controls.row(_('Post-routing'), postRoute),
 					E('div', { 'class':'mt-control-note' }, _('Post-routing and DMZ are mutually exclusive. Leave both disabled unless the module itself is providing the downstream LAN.')),
 					postRouteKnown ? controls.action(_('Apply post-routing'), function() {

@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# Read-only LuCI gateway. Keep arbitrary AT commands and every mutating action
+# behind the write ACL granted to /usr/sbin/mt5700m-at.
+case "${1:-}" in
+	status|temperature|network|cellscan-status|cellscan-result|sms-list|sms-info|system|fota-state|fota-progress)
+		exec /usr/sbin/mt5700m-at "$@"
+		;;
+	advanced)
+		case "${2:-}" in
+			connection|connection-settings|session|radio|radio-diagnostics|hardware)
+				exec /usr/sbin/mt5700m-at "$@"
+				;;
+		esac
+		;;
+esac
+
+echo 'read-only MT5700M action denied' >&2
+exit 64

@@ -1,9 +1,20 @@
 #!/bin/sh
 
-case "${INTERFACE:-${DEVICE:-}}:${ACTION:-}" in
-	eth2:add|eth2:register|eth2:ifup)
+netdev="${INTERFACE:-${DEVICE:-}}"
+configured="$(uci -q get network.MT5700M.device 2>/dev/null ||
+	uci -q get network.MT5700M.ifname 2>/dev/null || true)"
+[ -n "${netdev}" ] || exit 0
+[ "${netdev}" = "${configured}" ] || {
+	[ -r /usr/share/mt5700m/usb.sh ] || exit 0
+	. /usr/share/mt5700m/usb.sh
+	[ "${netdev}" = "$(mt5700m_netdev 2>/dev/null || true)" ] || exit 0
+}
+
+case "${ACTION:-}" in
+	add|register|ifup)
 		[ -x /etc/init.d/mt5700m-traffic ] || exit 0
-		/etc/init.d/mt5700m-traffic running >/dev/null 2>&1 || /etc/init.d/mt5700m-traffic start >/dev/null 2>&1
+		/etc/init.d/mt5700m-traffic running >/dev/null 2>&1 ||
+			/etc/init.d/mt5700m-traffic start >/dev/null 2>&1
 		;;
 esac
 

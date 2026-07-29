@@ -1,21 +1,17 @@
 #!/bin/sh
 
-[ -r /usr/share/mt5700m/usb.sh ] || exit 0
-. /usr/share/mt5700m/usb.sh
+USB_HELPER="${MT5700M_USB_HELPER:-/usr/share/mt5700m/usb.sh}"
+MANAGER="${MT5700M_MANAGER:-/usr/sbin/mt5700m-manager}"
+STATE_DIR="${MT5700M_HOTPLUG_STATE:-/var/run/mt5700m}"
+DELAY="${MT5700M_HOTPLUG_DELAY:-2}"
+COOLDOWN="${MT5700M_HOTPLUG_COOLDOWN:-2}"
+PENDING="${STATE_DIR}/hotplug-sync.pending"
+
+[ -r "${USB_HELPER}" ] || exit 0
 
 case "${ACTION:-}" in
 	add)
 		case "${PRODUCT:-}" in 3466/3301/*|3466/3301) ;; *) exit 0 ;; esac
-		if mt5700m_bind_network_driver; then
-			logger -t mt5700m-hotplug 'registered MT5700M NCM network interface'
-		else
-			logger -t mt5700m-hotplug 'unable to register MT5700M NCM network interface'
-		fi
-		if mt5700m_bind_serial_driver; then
-			logger -t mt5700m-hotplug 'registered MT5700M normal-mode serial interfaces'
-		else
-			logger -t mt5700m-hotplug 'unable to register MT5700M option serial interfaces'
-		fi
 		;;
 	remove)
 		# A removal event may no longer expose PRODUCT. Reconciliation is cheap
@@ -24,9 +20,19 @@ case "${ACTION:-}" in
 	*) exit 0 ;;
 esac
 
-if [ -x /etc/init.d/mt5700m-manager ]; then
-	(
-		sleep 1
-		/usr/sbin/mt5700m-manager sync >/dev/null 2>&1
-	) &
-fi
+[ -x "${MANAGER}" ] || exit 0
+mkdir -p "${STATE_DIR}" 2>/dev/null || exit 0
+
+# MT5700M is a composite USB device. One physical insertion produces several
+# add events while cdc_ncm and option claim their individual interfaces.
+# Binding on every event repeatedly tears the data interface down, which also
+# restarts dnsmasq and delays LAN DHCPv4 during boot. Queue one reconciliation
+# after enumeration settles and keep a short cooldown around events generated
+# by the driver binding itself.
+mkdir "${PENDING}" 2>/dev/null || exit 0
+(
+	trap 'rmdir "${PENDING}" 2>/dev/null' EXIT INT TERM
+	sleep "${DELAY}"
+	"${MANAGER}" sync >/dev/null 2>&1 || true
+	sleep "${COOLDOWN}"
+) &
