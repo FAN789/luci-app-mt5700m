@@ -7,6 +7,7 @@ LOG_FILE="${MT5700M_MANAGER_LOG:-/tmp/mt5700m-manager.log}"
 USB_HELPER="${MT5700M_USB_HELPER:-/usr/share/mt5700m/usb.sh}"
 AT_HELPER="${MT5700M_AT_HELPER:-/usr/sbin/mt5700m-at}"
 TEMP_CACHE="${STATE_DIR}/temperature"
+NDIS_SYNC_MARKER="${STATE_DIR}/ndis-session-synchronized"
 NDIS_RECOVERY_MARKER="${STATE_DIR}/ndis-recovery-attempted"
 INTERFACE='MT5700M'
 INTERFACE6='MT5700Mv6'
@@ -251,6 +252,7 @@ sync_manager() {
 	info="$(mt5700m_usb_info || true)"
 	state="${info%%|*}"
 	if [ "${state}" != 'normal' ]; then
+		rm -f "${NDIS_SYNC_MARKER}" "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
 		bring_down
 		[ -n "${info}" ] && log_message "module unavailable state=${state}" || true
 		return 0
@@ -295,7 +297,7 @@ set_ndis_session() {
 }
 
 recover_ndis_link() {
-	local netdev carrier
+	local netdev carrier reason
 
 	[ "$(config_value enabled 1)" = '1' ] || return 0
 	netdev="$(mt5700m_netdev || true)"
@@ -303,20 +305,38 @@ recover_ndis_link() {
 	carrier="$(cat "/sys/class/net/${netdev}/carrier" 2>/dev/null || echo 0)"
 	if [ "${carrier}" = '1' ]; then
 		rm -f "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
+	fi
+	if [ ! -e "${NDIS_SYNC_MARKER}" ]; then
+		reason='host-start'
+	elif [ "${carrier}" != '1' ] && [ ! -e "${NDIS_RECOVERY_MARKER}" ]; then
+		reason='carrier-loss'
+	else
 		return 0
 	fi
-	[ ! -e "${NDIS_RECOVERY_MARKER}" ] || return 0
 
 	# A sysupgrade reboots the host without rebooting the modem. The modem may
-	# retain an active PDP context while CDC NCM no longer reports carrier.
-	# Recreate only the USB data session once; never loop redials every monitor
-	# interval when the mobile network itself is unavailable.
-	set_ndis_session 0 || return 1
+	# retain an active PDP context while CDC NCM no longer reports carrier or
+	# passes no traffic. Reapply the retained user profile and recreate the data
+	# session once per host start or carrier-loss event.
+	bring_down
+	set_ndis_session 0 || {
+		bring_up
+		return 1
+	}
 	sleep 2
-	set_ndis_session 1 || return 1
+	apply_profile || {
+		set_ndis_session 1 || true
+		bring_up
+		return 1
+	}
+	set_ndis_session 1 || {
+		bring_up
+		return 1
+	}
+	bring_up
 	mkdir -p "${STATE_DIR}"
-	touch "${NDIS_RECOVERY_MARKER}"
-	log_message "recovered retained MT5700M NDIS session device=${netdev}"
+	touch "${NDIS_SYNC_MARKER}" "${NDIS_RECOVERY_MARKER}"
+	log_message "synchronized MT5700M data session reason=${reason} device=${netdev}"
 }
 
 connect_manager() {
@@ -325,10 +345,11 @@ connect_manager() {
 	[ "${CONFIG_CHANGED}" = '0' ] || uci -q commit mt5700m
 	sync_manager || return 1
 	apply_profile || log_message 'module profile was not changed; continuing with retained profile'
-	rm -f "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
 	set_ndis_session 0 || true
 	sleep 2
 	set_ndis_session 1 || log_message 'unable to start MT5700M NDIS session'
+	mkdir -p "${STATE_DIR}"
+	touch "${NDIS_SYNC_MARKER}" "${NDIS_RECOVERY_MARKER}"
 	bring_up
 	log_message 'connection enabled'
 }
@@ -338,7 +359,7 @@ disconnect_manager() {
 	set_if_changed mt5700m.connection.enabled 0
 	[ "${CONFIG_CHANGED}" = '0' ] || uci -q commit mt5700m
 	set_ndis_session 0 || log_message 'unable to stop MT5700M NDIS session'
-	rm -f "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
+	rm -f "${NDIS_SYNC_MARKER}" "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
 	bring_down
 	log_message 'connection disabled'
 }
@@ -352,8 +373,9 @@ redial_manager() {
 	[ "${CONFIG_CHANGED}" = '0' ] || uci -q commit mt5700m
 	sync_manager || return 1
 	apply_profile || log_message 'module profile was not changed during redial'
-	rm -f "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
 	set_ndis_session 1 || return 1
+	mkdir -p "${STATE_DIR}"
+	touch "${NDIS_SYNC_MARKER}" "${NDIS_RECOVERY_MARKER}"
 	bring_up
 	log_message 'connection recycled'
 }
