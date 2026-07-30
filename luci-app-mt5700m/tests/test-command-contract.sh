@@ -147,6 +147,9 @@ expect_rejected advanced-set direct-ip 0
 expect_command 'AT+CGDCONT=2,"IPV4V6","internet"' pdp-set 2 IPV4V6 internet
 expect_command 'AT+CGDCONT=2' pdp-remove 2
 expect_command 'AT+CGACT=1,2' pdp-state 1 2
+expect_command 'AT^NDISDUP=1,0' ndis 0
+expect_command 'AT^NDISDUP=1,1' ndis 1
+expect_rejected ndis 2
 expect_command 'AT^DSFLOWCLR' flow-clear
 expect_command 'AT+CFUN=0' airplane 0
 expect_command 'AT+CPIN="1234"' sim-pin verify 1234

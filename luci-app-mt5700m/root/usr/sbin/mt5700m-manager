@@ -7,6 +7,7 @@ LOG_FILE="${MT5700M_MANAGER_LOG:-/tmp/mt5700m-manager.log}"
 USB_HELPER="${MT5700M_USB_HELPER:-/usr/share/mt5700m/usb.sh}"
 AT_HELPER="${MT5700M_AT_HELPER:-/usr/sbin/mt5700m-at}"
 TEMP_CACHE="${STATE_DIR}/temperature"
+NDIS_RECOVERY_MARKER="${STATE_DIR}/ndis-recovery-attempted"
 INTERFACE='MT5700M'
 INTERFACE6='MT5700Mv6'
 
@@ -168,6 +169,7 @@ ensure_network() {
 	set_if_changed "network.${INTERFACE}.metric" "${EFFECTIVE_METRIC}"
 	set_if_changed "network.${INTERFACE}.defaultroute" "${IPV4_DEFAULT}"
 	set_if_changed "network.${INTERFACE}.norelease" '1'
+	set_if_changed "network.${INTERFACE}.force_link" '1'
 	delete_if_present "network.${INTERFACE}.modem_config"
 	if [ "${pdp_type}" = 'ipv6' ]; then
 		set_if_changed "network.${INTERFACE}.proto" 'none'
@@ -280,7 +282,41 @@ apply_profile() {
 	password="$(config_value password '')"
 	auth="$(config_value auth none)"
 	case "${auth}" in pap) auth_code=1 ;; chap) auth_code=2 ;; *) auth_code=0 ;; esac
-	/usr/sbin/mt5700m-at advanced-set autodial 1 1 "${protocol}" "${apn}" "${username}" "${password}" "${auth_code}" >/dev/null
+	# The MT5700M manual requires the previous auto-dial profile to be
+	# cancelled before a replacement is accepted.
+	"${AT_HELPER}" advanced-set autodial 0 >/dev/null || return 1
+	sleep 1
+	"${AT_HELPER}" advanced-set autodial 1 1 "${protocol}" "${apn}" "${username}" "${password}" "${auth_code}" >/dev/null
+}
+
+set_ndis_session() {
+	case "$1" in 0|1) ;; *) return 1 ;; esac
+	"${AT_HELPER}" ndis "$1" >/dev/null
+}
+
+recover_ndis_link() {
+	local netdev carrier
+
+	[ "$(config_value enabled 1)" = '1' ] || return 0
+	netdev="$(mt5700m_netdev || true)"
+	[ -n "${netdev}" ] || return 1
+	carrier="$(cat "/sys/class/net/${netdev}/carrier" 2>/dev/null || echo 0)"
+	if [ "${carrier}" = '1' ]; then
+		rm -f "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
+		return 0
+	fi
+	[ ! -e "${NDIS_RECOVERY_MARKER}" ] || return 0
+
+	# A sysupgrade reboots the host without rebooting the modem. The modem may
+	# retain an active PDP context while CDC NCM no longer reports carrier.
+	# Recreate only the USB data session once; never loop redials every monitor
+	# interval when the mobile network itself is unavailable.
+	set_ndis_session 0 || return 1
+	sleep 2
+	set_ndis_session 1 || return 1
+	mkdir -p "${STATE_DIR}"
+	touch "${NDIS_RECOVERY_MARKER}"
+	log_message "recovered retained MT5700M NDIS session device=${netdev}"
 }
 
 connect_manager() {
@@ -289,6 +325,10 @@ connect_manager() {
 	[ "${CONFIG_CHANGED}" = '0' ] || uci -q commit mt5700m
 	sync_manager || return 1
 	apply_profile || log_message 'module profile was not changed; continuing with retained profile'
+	rm -f "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
+	set_ndis_session 0 || true
+	sleep 2
+	set_ndis_session 1 || log_message 'unable to start MT5700M NDIS session'
 	bring_up
 	log_message 'connection enabled'
 }
@@ -297,18 +337,23 @@ disconnect_manager() {
 	CONFIG_CHANGED=0
 	set_if_changed mt5700m.connection.enabled 0
 	[ "${CONFIG_CHANGED}" = '0' ] || uci -q commit mt5700m
+	set_ndis_session 0 || log_message 'unable to stop MT5700M NDIS session'
+	rm -f "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
 	bring_down
 	log_message 'connection disabled'
 }
 
 redial_manager() {
 	bring_down
-	sleep 1
+	set_ndis_session 0 || true
+	sleep 2
 	CONFIG_CHANGED=0
 	set_if_changed mt5700m.connection.enabled 1
 	[ "${CONFIG_CHANGED}" = '0' ] || uci -q commit mt5700m
 	sync_manager || return 1
 	apply_profile || log_message 'module profile was not changed during redial'
+	rm -f "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
+	set_ndis_session 1 || return 1
 	bring_up
 	log_message 'connection recycled'
 }
@@ -350,6 +395,7 @@ monitor_manager() {
 	while :; do
 		if acquire_lock; then
 			sync_manager >/dev/null 2>&1 || true
+			recover_ndis_link >/dev/null 2>&1 || true
 			release_lock
 		fi
 		refresh_temperature_cache >/dev/null 2>&1 || true
@@ -371,8 +417,9 @@ case "${action}" in
 			connect) connect_manager ;;
 			disconnect) disconnect_manager ;;
 			redial) redial_manager ;;
+			recover-ndis) recover_ndis_link ;;
 			down) bring_down ;;
-			*) echo "Usage: $0 {status-json|sync|connect|disconnect|redial|refresh-temperature|log|monitor}" >&2; exit 64 ;;
+			*) echo "Usage: $0 {status-json|sync|connect|disconnect|redial|recover-ndis|refresh-temperature|log|monitor}" >&2; exit 64 ;;
 		esac
 		;;
 esac
