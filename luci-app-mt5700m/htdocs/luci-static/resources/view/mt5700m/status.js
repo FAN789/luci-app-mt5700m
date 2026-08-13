@@ -239,7 +239,7 @@ return view.extend({
 				this.shortcut(_('Radio and Cells'), _('Bands, cells, radio policy and diagnostics'), 'admin/modem/mt5700m/network'),
 				this.shortcut(_('Module and SIM'), _('Module identity, SIM information and maintenance'), 'admin/modem/mt5700m/system')
 			])
-		]);
+		].filter(Boolean));
 	},
 
 	handleSave: null,

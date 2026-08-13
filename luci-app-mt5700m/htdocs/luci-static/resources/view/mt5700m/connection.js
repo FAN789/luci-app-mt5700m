@@ -128,7 +128,7 @@ return view.extend({
 				E('div', { 'class':'mtconn-session-head' }, [ E('div', {}, [ E('h3', {}, _('Assigned addresses')), E('p', {}, _('Gateway, DNS and PDP session details reported by the MT5700M.')) ]), E('span', { 'class':'mtconn-session-badge' + (active ? ' on' : '') }, active ? _('Active') : _('Disconnected')) ]),
 				error ? E('div', { 'class':'alert-message warning' }, error) : null,
 				E('div', { 'class':'mtconn-session-columns' }, addressRows)
-			]),
+			].filter(Boolean)),
 			E('section', { 'class':'mtconn-session-card mt-ui-card' }, [
 				E('div', { 'class':'mtconn-session-head' }, [ E('div', {}, [ E('h3', {}, _('Module traffic counters')), E('p', {}, _('Counters maintained by the modem firmware for the current and accumulated sessions.')) ]), E('span', { 'class':'mtconn-session-badge' }, _('Module')) ]),
 				self.sessionRow(_('Current duration'), controls.formatDuration(session.currentDuration)),
@@ -337,7 +337,7 @@ return view.extend({
 					})
 				])
 			])
-		]);
+		].filter(Boolean));
 
 		return m.render().then(function(formNode) {
 			return E('div', { 'class': 'mtconn-page mt-ui-page' }, [
@@ -385,7 +385,7 @@ return view.extend({
 					E('div', { 'class':'mtconn-advanced-body mt-ui-details-body' }, [ pdpPanel, moduleControls ])
 				]),
 				logDetails
-			]);
+			].filter(Boolean));
 		});
 	}
 });

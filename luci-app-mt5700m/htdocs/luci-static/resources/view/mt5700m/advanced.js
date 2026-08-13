@@ -122,7 +122,7 @@ return view.extend({
 				]),
 				E('pre', { 'class':'mt-hardware-raw mt-ui-details-body' }, raw || _('No response.'))
 			])
-		]);
+		].filter(Boolean));
 	},
 
 	handleSave: null,

@@ -32,6 +32,7 @@ jobs:
           sh luci-app-mt5700m/tests/test-temperature-cache.sh
       - name: Check executable service files
         run: |
+          test -x luci-app-mt5700m/root/usr/sbin/mt5700m-read
           test -x luci-app-mt5700m/root/usr/sbin/mt5700m-traffic
           test -x luci-app-mt5700m/root/usr/libexec/rpcd/mt5700m-traffic
           test -x luci-app-mt5700m/root/etc/init.d/mt5700m-traffic
