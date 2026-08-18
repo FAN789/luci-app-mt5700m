@@ -3,7 +3,7 @@
 [![CI](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/ci.yml/badge.svg)](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/ci.yml)
 [![Build Release](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml/badge.svg)](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml)
 
-专门面向移远 MT5700M-CN 5G 模组的 OpenWrt LuCI 管理器。它把状态、移动
+专门面向鼎桥（TD Tech）MT5700M-CN 5G 模组的 OpenWrt LuCI 管理器。它把状态、移动
 数据、网络与小区、短信、系统维护和 AT 终端统一到一个应用中，并按照 MT5700M
 手册识别 USB 正常、升级和 Dump 模式。
 
