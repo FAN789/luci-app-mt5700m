@@ -413,6 +413,16 @@ status_json() {
 	json_dump
 }
 
+refresh_read_caches() {
+	if [ -x /usr/sbin/mt5700m-read ]; then
+		(
+			/usr/sbin/mt5700m-read status >/dev/null 2>&1 &
+			/usr/sbin/mt5700m-read advanced session >/dev/null 2>&1 &
+			wait
+		) &
+	fi
+}
+
 monitor_manager() {
 	while :; do
 		if acquire_lock; then
@@ -421,6 +431,9 @@ monitor_manager() {
 			release_lock
 		fi
 		refresh_temperature_cache >/dev/null 2>&1 || true
+		# Prime after boot and keep snapshots warm. The read helper immediately
+		# returns fresh data or launches a single background refresh when stale.
+		refresh_read_caches
 		sleep 15
 	done
 }

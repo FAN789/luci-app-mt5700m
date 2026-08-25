@@ -54,6 +54,7 @@ chmod 0755 "${TMP}/bin/uci" "${TMP}/bin/nc"
 export PATH="${TMP}/bin:${PATH}"
 export MT5700M_TEST_LOG="${TMP}/commands"
 export MT5700M_USB_HELPER="${ROOT}/root/usr/share/mt5700m/usb.sh"
+export MT5700M_READ_CACHE_DIR="${TMP}/read-cache"
 
 expect_command() {
 	expected="$1"
@@ -127,7 +128,16 @@ for read_command in status network system sms-list sms-info; do
 		fail "read command ${read_command} failed"
 done
 
+mkdir -p "${MT5700M_READ_CACHE_DIR}"
+: >"${MT5700M_READ_CACHE_DIR}/status.cache"
+: >"${MT5700M_READ_CACHE_DIR}/status.time"
+: >"${MT5700M_READ_CACHE_DIR}/session.cache"
+: >"${MT5700M_READ_CACHE_DIR}/session.time"
 expect_command 'AT^TDPCIELANCFG=2' advanced-set nic-speed 2
+[ ! -e "${MT5700M_READ_CACHE_DIR}/status.cache" ] || fail 'write did not invalidate the status cache'
+[ ! -e "${MT5700M_READ_CACHE_DIR}/session.cache" ] || fail 'write did not invalidate the session cache'
+[ ! -e "${MT5700M_READ_CACHE_DIR}/status.time" ] || fail 'write did not invalidate the status timestamp'
+[ ! -e "${MT5700M_READ_CACHE_DIR}/session.time" ] || fail 'write did not invalidate the session timestamp'
 expect_command 'AT^TDPMCFG=1,0,0,0' advanced-set pcie-controller 1
 expect_command 'AT^LEDSWITCH=1' advanced-set led 1
 expect_command 'AT^SETMODE=4' advanced-set usb-mode 4

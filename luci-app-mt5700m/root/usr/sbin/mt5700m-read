@@ -2,14 +2,107 @@
 
 # Read-only LuCI gateway. Keep arbitrary AT commands and every mutating action
 # behind the write ACL granted to /usr/sbin/mt5700m-at.
+AT_HELPER="${MT5700M_AT_HELPER:-/usr/sbin/mt5700m-at}"
+CACHE_DIR="${MT5700M_READ_CACHE_DIR:-/tmp/mt5700m-read-cache}"
+CACHE_TTL="${MT5700M_READ_CACHE_TTL:-5}"
+CACHE_MAX_STALE="${MT5700M_READ_CACHE_MAX_STALE:-60}"
+
+case "${CACHE_TTL}" in ''|*[!0-9]*) CACHE_TTL=5 ;; esac
+case "${CACHE_MAX_STALE}" in ''|*[!0-9]*) CACHE_MAX_STALE=60 ;; esac
+
+cache_age() {
+	local cache_file="$1" time_file="$2" now modified
+
+	[ -f "${cache_file}" ] && [ -f "${time_file}" ] || return 1
+	now="$(date +%s)"
+	modified="$(cat "${time_file}" 2>/dev/null || true)"
+	case "${modified}" in ''|*[!0-9]*) return 1 ;; esac
+	[ "${modified}" -le "${now}" ] || return 1
+	printf '%s\n' "$((now - modified))"
+}
+
+refresh_cache() {
+	local key="$1" cache_file time_file lock_dir temporary error_file timestamp_file rc
+	shift
+
+	umask 077
+	mkdir -p "${CACHE_DIR}" || return 1
+	chmod 0700 "${CACHE_DIR}" 2>/dev/null || true
+	cache_file="${CACHE_DIR}/${key}.cache"
+	time_file="${CACHE_DIR}/${key}.time"
+	lock_dir="${CACHE_DIR}/${key}.lock"
+	mkdir "${lock_dir}" 2>/dev/null || return 75
+
+	temporary="$(mktemp "${CACHE_DIR}/.${key}.XXXXXX")" || {
+		rmdir "${lock_dir}" 2>/dev/null || true
+		return 1
+	}
+	error_file="${temporary}.err"
+	timestamp_file="${temporary}.time"
+	if "${AT_HELPER}" "$@" >"${temporary}" 2>"${error_file}"; then
+		date +%s >"${timestamp_file}"
+		chmod 0600 "${temporary}" "${timestamp_file}" 2>/dev/null || true
+		mv -f "${temporary}" "${cache_file}"
+		mv -f "${timestamp_file}" "${time_file}"
+		rc=0
+	else
+		rc=$?
+		cat "${error_file}" >&2
+		rm -f "${temporary}"
+	fi
+	rm -f "${error_file}" "${timestamp_file}"
+	rmdir "${lock_dir}" 2>/dev/null || true
+	return "${rc}"
+}
+
+cached_read() {
+	local key="$1" cache_file time_file age rc
+	shift
+	cache_file="${CACHE_DIR}/${key}.cache"
+	time_file="${CACHE_DIR}/${key}.time"
+	age="$(cache_age "${cache_file}" "${time_file}" || true)"
+
+	if [ -n "${age}" ] && [ "${age}" -le "${CACHE_TTL}" ]; then
+		cat "${cache_file}"
+		return 0
+	fi
+
+	if [ -n "${age}" ] && [ "${age}" -le "${CACHE_MAX_STALE}" ]; then
+		cat "${cache_file}"
+		(refresh_cache "${key}" "$@") </dev/null >/dev/null 2>&1 &
+		return 0
+	fi
+
+	refresh_cache "${key}" "$@"
+	rc=$?
+	if [ "${rc}" -eq 75 ]; then
+		# Another request is already producing the first snapshot. Wait briefly
+		# for its atomic rename instead of launching a duplicate AT query batch.
+		for _ in 1 2; do
+			[ -f "${cache_file}" ] && break
+			sleep 1
+		done
+	fi
+	[ -f "${cache_file}" ] || return "${rc}"
+	cat "${cache_file}"
+}
+
 case "${1:-}" in
-	status|temperature|network|cellscan-status|cellscan-result|sms-list|sms-info|system|fota-state|fota-progress)
-		exec /usr/sbin/mt5700m-at "$@"
+	status)
+		cached_read status "$@"
+		exit $?
+		;;
+	temperature|network|cellscan-status|cellscan-result|sms-list|sms-info|system|fota-state|fota-progress)
+		exec "${AT_HELPER}" "$@"
 		;;
 	advanced)
 		case "${2:-}" in
-			connection|connection-settings|session|radio|radio-diagnostics|hardware)
-				exec /usr/sbin/mt5700m-at "$@"
+			session)
+				cached_read session "$@"
+				exit $?
+				;;
+			connection|connection-settings|radio|radio-diagnostics|hardware)
+				exec "${AT_HELPER}" "$@"
 				;;
 		esac
 		;;

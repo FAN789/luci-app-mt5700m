@@ -3,6 +3,7 @@
 CONFIG='mt5700m.settings'
 USB_HELPER="${MT5700M_USB_HELPER:-/usr/share/mt5700m/usb.sh}"
 CELL_SCAN_DIR="${MT5700M_CELL_SCAN_DIR:-/tmp/mt5700m-cellscan}"
+READ_CACHE_DIR="${MT5700M_READ_CACHE_DIR:-/tmp/mt5700m-read-cache}"
 
 [ -r "${USB_HELPER}" ] && . "${USB_HELPER}"
 
@@ -1300,7 +1301,19 @@ cell_scan_result() {
 	fi
 }
 
-case "${1:-status}" in
+action="${1:-status}"
+case "${action}" in
+	status|temperature|network|cellscan-status|cellscan-result|sms-list|sms-info|system|fota-state|fota-progress|advanced|preview-lock)
+		;;
+	*)
+		# A write may change values shown by the overview or session cards.
+		# Remove only the two known snapshots; the next read will repopulate them.
+		rm -f "${READ_CACHE_DIR}/status.cache" "${READ_CACHE_DIR}/status.time" \
+			"${READ_CACHE_DIR}/session.cache" "${READ_CACHE_DIR}/session.time"
+		;;
+esac
+
+case "${action}" in
 	status)
 		# Keep LuCI status below rpcd's execution timeout even if an optional
 		# modem query does not return a final result promptly.
