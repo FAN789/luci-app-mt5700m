@@ -4,10 +4,12 @@
 [![Build Release](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml/badge.svg)](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml)
 
 面向鼎桥（TD Tech）MT5700M-CN 5G 模组的 OpenWrt LuCI 管理插件。
-当前发布版本 **v3.0.0**：应用 `3.0.0-r7`，原生传输程序 `1.0.0-r6`。
+当前发布版本 **v3.0.1**：应用 `3.0.1-r1`，原生传输程序 `1.0.1-r1`。
 这是插件包，不是整机固件，不包含个人网络配置、短信、SIM 数据或登录凭据。
 
-## 3.0.0 更新
+## 3.0.1 更新
+
+3.0.1 修复首次 3.0.0 在线构建发现的 SDK 打包目录创建问题；下列运行时功能与已验收的 3.0.0-r7 / 1.0.0-r6 相同。
 
 - 自有 C 程序 `mt5700m-transport` 负责串口/TCP AT 和短信传输；运行时不再依赖 `ubus-at-daemon`、`sms-tool_q` 或 QModem 服务。
 - 按 MT5700M 命令格式修复短信发送；后台发送任务显示进度和明确结果，确认不明时不自动重发，以免重复发送和计费。

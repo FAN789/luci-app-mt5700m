@@ -1,8 +1,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=mt5700m-transport
-PKG_VERSION:=1.0.0
-PKG_RELEASE:=6
+PKG_VERSION:=1.0.1
+PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 include $(INCLUDE_DIR)/package.mk
 
@@ -14,7 +14,7 @@ define Package/mt5700m-transport
 endef
 
 define Build/Prepare
-	$(MKDIR) $(PKG_BUILD_DIR)
+	mkdir -p $(PKG_BUILD_DIR)
 	$(CP) ./src/* $(PKG_BUILD_DIR)/
 endef
 

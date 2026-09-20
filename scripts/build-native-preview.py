@@ -47,9 +47,9 @@ with tempfile.TemporaryDirectory(prefix='mt5700m-pack-') as directory:
         private.chmod(0o600)
     run('openssl', 'pkey', '-in', private, '-pubout', '-out', public)
     packages = [
-        ('mt5700m-transport', '1.0.0-r6', 'aarch64_cortex-a53', 'libc'),
-        ('luci-app-mt5700m', '3.0.0-r7', 'all', 'luci-base, mt5700m-transport, flock, kmod-usb3, kmod-usb-serial, kmod-usb-serial-option, kmod-usb-net, kmod-usb-net-cdc-ether, kmod-usb-net-cdc-ncm'),
-        ('luci-i18n-mt5700m-zh-cn', '3.0.0-r7', 'all', 'luci-app-mt5700m'),
+        ('mt5700m-transport', '1.0.1-r1', 'aarch64_cortex-a53', 'libc'),
+        ('luci-app-mt5700m', '3.0.1-r1', 'all', 'luci-base, mt5700m-transport, flock, kmod-usb3, kmod-usb-serial, kmod-usb-serial-option, kmod-usb-net, kmod-usb-net-cdc-ether, kmod-usb-net-cdc-ncm'),
+        ('luci-i18n-mt5700m-zh-cn', '3.0.1-r1', 'all', 'luci-app-mt5700m'),
     ]
     for name, version, arch, depends in packages:
         root = work / name / 'root'
