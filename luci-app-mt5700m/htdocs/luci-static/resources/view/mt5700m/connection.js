@@ -64,8 +64,8 @@ return view.extend({
 				return Promise.all([
 					Promise.resolve(this.manager),
 					callDeviceStatus(this.manager.network || '').catch(function() { return {}; }),
-					fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'connection-settings' ]).catch(function(err) { return { stdout: '', stderr:err.message || String(err) }; }),
-					fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'session' ]).catch(function(err) { return { stdout: '', stderr:err.message || String(err) }; })
+					controls.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'connection-settings' ]).catch(function(err) { return { stdout: '', stderr:err.message || String(err) }; }),
+					controls.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'session' ]).catch(function(err) { return { stdout: '', stderr:err.message || String(err) }; })
 				]);
 			}, this));
 		}, this));
@@ -154,7 +154,7 @@ return view.extend({
 				if (!/^(?:[1-9]|1[01])$/.test(cidValue) || /[",\r\n]/.test(apn.value || ''))
 					return ui.addNotification(null, E('p', {}, _('Enter a CID from 1 to 11 and a valid APN.')), 'warning');
 				ui.hideModal();
-				fs.exec('/usr/sbin/mt5700m-at', [ 'pdp-set', cidValue, type.value, apn.value.trim() ]).then(function() { window.location.reload(); }, function(err) { ui.addNotification(null, E('p', {}, err.message || String(err)), 'danger'); });
+				controls.exec('/usr/sbin/mt5700m-at', [ 'pdp-set', cidValue, type.value, apn.value.trim() ]).then(function() { window.location.reload(); }, function(err) { ui.addNotification(null, E('p', {}, err.message || String(err)), 'danger'); });
 			} }, _('Save')) ])
 		]);
 	},
@@ -343,6 +343,7 @@ return view.extend({
 			return E('div', { 'class': 'mtconn-page mt-ui-page' }, [
 				self.styleNode(),
 				controls.styleNode(),
+				controls.healthNode(manager),
 				manager.usb_state && manager.usb_state !== 'normal' ? E('div', { 'class':'alert-message warning' }, _('The MT5700M is not in normal USB mode. Connection settings remain available, but dialing cannot start.')) : null,
 				E('section', { 'class': 'mtconn-hero mt-ui-hero' }, [
 					E('div', {}, [

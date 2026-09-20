@@ -4,6 +4,8 @@ CONFIG='mt5700m.settings'
 USB_HELPER="${MT5700M_USB_HELPER:-/usr/share/mt5700m/usb.sh}"
 CELL_SCAN_DIR="${MT5700M_CELL_SCAN_DIR:-/tmp/mt5700m-cellscan}"
 READ_CACHE_DIR="${MT5700M_READ_CACHE_DIR:-/tmp/mt5700m-read-cache}"
+SMS_JOB_DIR="${MT5700M_SMS_JOB_DIR:-/tmp/mt5700m-sms-jobs}"
+. "${MT5700M_LOCK_HELPER:-$(dirname "$0")/../share/mt5700m/lock.sh}"
 
 [ -r "${USB_HELPER}" ] && . "${USB_HELPER}"
 
@@ -77,23 +79,13 @@ detect_modem_gateway() {
 
 network_hosts() {
 	local gateway
-
-	gateway="$(detect_modem_gateway || true)"
-
-	if [ -n "${gateway}" ]; then
-		printf '%s\n' "${gateway}"
-	fi
-
-	if [ -n "${host}" ] && [ "${host}" != "${gateway}" ]; then
-		printf '%s\n' "${host}"
-	fi
-
-	if [ "${host}" != "192.168.8.1" ] && [ "${gateway}" != "192.168.8.1" ]; then
-		printf '%s\n' "192.168.8.1"
-	fi
-
-	if [ "${host}" != "10.0.0.1" ] && [ "${gateway}" != "10.0.0.1" ]; then
-		printf '%s\n' "10.0.0.1"
+	# Explicit network mode honors the configured endpoint. Auto uses only
+	# the detected modem gateway, never guessed household LAN addresses.
+	if [ "${mode}" = "network" ]; then
+		[ -n "${host}" ] && printf '%s\n' "${host}"
+	else
+		gateway="$(detect_modem_gateway || true)"
+		[ -n "${gateway}" ] && printf '%s\n' "${gateway}"
 	fi
 }
 
@@ -114,224 +106,120 @@ detect_mt5700m_at_port() {
 	return 1
 }
 
-at_network_cmd() {
-	local command="$1"
-	local target_host="${2:-${host}}"
-	local response rc
-
-	if command -v nc >/dev/null 2>&1; then
-		response="$(printf '%s\r' "${command}" | run_with_timeout "${timeout_s}" nc "${target_host}" "${port}" 2>/dev/null)"
-		rc=$?
-		[ -n "${response}" ] && printf '%s\n' "${response}"
-		[ "${rc}" -eq 0 ] || return "${rc}"
-		at_response_ok "${response}"
-		return $?
-	fi
-
-	echo "nc command not found" >&2
-	return 127
-}
-
-at_response_ok() {
-	# A completed transport request is not necessarily an accepted AT command.
-	# Propagate final modem errors so LuCI never reports a rejected setting as
-	# successfully applied. Some ubus-at-daemon versions preserve escaped line
-	# endings, so do not require the final result token to start on a clean line.
-	printf '%s\n' "$1" | grep -Fq 'ERROR' && return 1
-	return 0
-}
-
-at_ubus_cmd() {
-	local command="$1"
-	local device="$2"
-	local payload result status response
-
-	command -v ubus >/dev/null 2>&1 || return 127
-	command -v jsonfilter >/dev/null 2>&1 || return 127
-	[ -r /usr/share/libubox/jshn.sh ] || return 127
-	ubus list at-daemon >/dev/null 2>&1 || return 127
-
-	# The bundled AT daemon serializes every manager request. Its default end
-	# flags cover OK and standard AT errors.
-	. /usr/share/libubox/jshn.sh
-	json_init
-	json_add_string at_port "${device}"
-	json_add_int timeout "${timeout_s}"
-	json_add_string at_cmd "${command}"
-	payload="$(json_dump)"
-
-	# ubus itself otherwise uses a much shorter default timeout than the modem
-	# command. Cell scan is documented to need up to two minutes.
-	result="$(ubus -t "$((timeout_s + 5))" call at-daemon sendat "${payload}" 2>/dev/null)" || return 1
-	status="$(printf '%s' "${result}" | jsonfilter -e '@.status' 2>/dev/null)"
-	[ "${status}" = "success" ] || return 1
-
-	response="$(printf '%s' "${result}" | jsonfilter -e '@.response' 2>/dev/null)"
-	[ -n "${response}" ] && printf '%s\n' "${response}"
-	at_response_ok "${response}"
-	return $?
-}
-
-at_serial_cmd() {
-	local command="$1"
-	local device="$2"
-	local tmp reader elapsed output
-
-	[ -e "${device}" ] || return 1
-
-	if command -v stty >/dev/null 2>&1; then
-		stty -F "${device}" 115200 raw -echo -echoe -echok -echoctl -echoke -ixon -ixoff min 0 time 5 2>/dev/null || true
-	fi
-
-	run_with_timeout 1 cat "${device}" >/dev/null 2>&1 || true
-
-	tmp="$(mktemp /tmp/mt5700m-at.XXXXXX)" || return 1
-	cat "${device}" > "${tmp}" 2>/dev/null &
-	reader="$!"
-
-	printf '%s\r' "${command}" > "${device}"
-
-	elapsed=0
-	while [ "${elapsed}" -lt "${timeout_s}" ]; do
-		output="$(tr -d '\r' < "${tmp}" 2>/dev/null || true)"
-		if printf '%s\n' "${output}" | grep -Eq '(^|\n)(OK|ERROR|\+CME ERROR|\+CMS ERROR)(\n|$)'; then
-			printf '%s\n' "${output}"
-			kill "${reader}" 2>/dev/null || true
-			wait "${reader}" 2>/dev/null || true
-			rm -f "${tmp}"
-			at_response_ok "${output}"
+# All traffic uses one native transport and one lock, including SMS.
+# Once a transport is selected a failed write is NEVER replayed elsewhere.
+transport_request() {
+	local action="$1"
+	shift
+	local device target
+	[ "${enabled}" = "1" ] || return 2
+	if [ "${mode}" != "network" ]; then
+		device="$(detect_mt5700m_at_port || true)"
+		if [ -n "${device}" ]; then
+			mt5700m-transport -d "${device}" -t "${timeout_s}" "${action}" "$@"
 			return $?
 		fi
-		sleep 1
-		elapsed=$((elapsed + 1))
-	done
-
-	kill "${reader}" 2>/dev/null || true
-	wait "${reader}" 2>/dev/null || true
-	output="$(tr -d '\r' < "${tmp}" 2>/dev/null || true)"
-	rm -f "${tmp}"
-
-	[ -n "${output}" ] && printf '%s\n' "${output}"
-	# A serial timeout is a transport failure, not a modem ERROR response.
-	# Let auto mode try the network AT endpoint in this case.
-	return 124
+		[ "${mode}" = "serial" ] && return 69
+	fi
+	target="$(network_hosts | head -n 1)"
+	[ -n "${target}" ] || return 69
+	mt5700m-transport -h "${target}" -p "${port}" -t "${timeout_s}" "${action}" "$@"
 }
 
 at_cmd() {
-	local command="$1"
-	local device target serial_output serial_rc ubus_rc
-
-	[ "${enabled}" = "1" ] || return 2
-	command="$(printf '%s' "${command}" | tr -d '\000\r\n')"
-	[ -n "${command}" ] || return 1
-
-	case "${mode}" in
-		serial)
-			device="$(detect_mt5700m_at_port)"
-			[ -n "${device}" ] || {
-				echo "AT serial port not found" >&2
-				return 1
-			}
-			at_ubus_cmd "${command}" "${device}"
-			ubus_rc=$?
-			[ "${ubus_rc}" -eq 0 ] && return 0
-			# A live at-daemon owns the descriptor. Do not bypass its lock when
-			# a queued request times out or the modem rejects the command.
-			[ "${ubus_rc}" -ne 127 ] && return "${ubus_rc}"
-			at_serial_cmd "${command}" "${device}"
-			return $?
-			;;
-		network)
-			for target in $(network_hosts); do
-				at_network_cmd "${command}" "${target}" && return 0
-			done
-			return 1
-			;;
-		auto)
-			device="$(detect_mt5700m_at_port)"
-			if [ -n "${device}" ]; then
-				at_ubus_cmd "${command}" "${device}"
-				ubus_rc=$?
-				[ "${ubus_rc}" -eq 0 ] && return 0
-				[ "${ubus_rc}" -ne 127 ] && return "${ubus_rc}"
-				serial_output="$(at_serial_cmd "${command}" "${device}")"
-				serial_rc=$?
-				if [ "${serial_rc}" -eq 0 ]; then
-					[ -n "${serial_output}" ] && printf '%s\n' "${serial_output}"
-					return 0
-				fi
-			fi
-
-			for target in $(network_hosts); do
-				at_network_cmd "${command}" "${target}" && return 0
-			done
-
-			return 1
-			;;
-	esac
+	transport_request at "$1"
 }
 
 at_sms_send() {
-	local number="$1"
-	local text="$2"
-	local device
+	# The native sender validates UTF-8/recipient before opening the modem,
+	# holds the lock through CMGF/CMGS/prompt/PDU/final response, and supports
+	# multipart UCS-2. A timeout is ambiguous and must not trigger retries.
+	transport_request sms "$1" "$2"
+}
 
-	[ "${enabled}" = "1" ] || return 2
-	number="$(printf '%s' "${number}" | tr -cd '0-9+')"
-	text="$(printf '%s' "${text}" | tr -d '\000')"
-	[ -n "${number}" ] && [ -n "${text}" ] || return 1
+sms_job_path() {
+	case "${1:-}" in job.*) ;; *) return 64 ;; esac
+	case "$1" in *[!a-zA-Z0-9.]*|*..*) return 64 ;; esac
+	[ "${#1}" -eq 10 ] || return 64
+	[ -d "${SMS_JOB_DIR}/$1" ] || return 64
+	printf '%s\n' "${SMS_JOB_DIR}/$1"
+}
 
-	case "${mode}" in
-		serial|auto)
-			device="$(detect_mt5700m_at_port)"
-			if [ -n "${device}" ]; then
-				# sms_tool_q performs PDU encoding and waits for the final +CMGS
-				# result. Never retry after invoking it, avoiding duplicate SMS.
-				if command -v sms_tool_q >/dev/null 2>&1; then
-					sms_tool_q -d "${device}" send "${number}" "${text}"
-					return $?
-				fi
-				if command -v stty >/dev/null 2>&1; then
-					stty -F "${device}" 115200 raw -echo -echoe -echok -echoctl -echoke -ixon -ixoff min 0 time 5 2>/dev/null || true
-				fi
-				(
-					printf 'AT+CMGF=1\r' > "${device}"
-					sleep 1
-					printf 'AT+CMGS="%s"\r' "${number}" > "${device}"
-					sleep 1
-					printf '%s\032' "${text}" > "${device}"
-				) &
-				run_with_timeout "$((timeout_s + 20))" cat "${device}" 2>/dev/null | awk '
-					{
-						gsub(/\r/, "")
-						print
-					}
-					/^OK$/ || /^ERROR$/ || /^\+CME ERROR/ || /^\+CMS ERROR/ {
-						exit
-					}
-				'
-				return $?
-			fi
-			[ "${mode}" = "serial" ] && {
-				echo "AT serial port not found" >&2
-				return 1
-			}
+sms_job_start() {
+	local job pid state_file state old_pid
+	[ -n "${1:-}" ] && [ -n "${2:-}" ] || return 64
+	umask 077
+	mkdir -p "${SMS_JOB_DIR}" || return 1
+	chmod 0700 "${SMS_JOB_DIR}"
+	# The caller holds the shared action lock. Refuse another pending job even
+	# during the interval before the first detached worker acquires that lock.
+	for state_file in "${SMS_JOB_DIR}"/job.*/state; do
+		[ -f "${state_file}" ] || continue
+		state="$(cat "${state_file}")"
+		case "${state}" in queued|running)
+			old_pid="$(cat "${state_file%/state}/pid" 2>/dev/null)"
+			case "${old_pid}" in ''|*[!0-9]*) ;;
+				*) if kill -0 "${old_pid}" 2>/dev/null; then
+					printf 'Another SMS job is pending. No new SMS submitted.\n' >&2
+					return 75
+				fi ;;
+			esac
+			printf 'interrupted\n' >"${state_file}"
+			rm -f "${state_file%/state}/number" "${state_file%/state}/body"
 			;;
-	esac
+		esac
+	done
+	job="$(mktemp -d "${SMS_JOB_DIR}/job.XXXXXX")" || return 1
+	printf '%s' "$1" >"${job}/number"
+	printf '%s' "$2" >"${job}/body"
+	printf 'queued\n' >"${job}/state"
+	(trap '' HUP; export MT5700M_ACTION_LOCKED=0; exec "$0" sms-send-worker "${job##*/}") 9>&- </dev/null >/dev/null 2>&1 &
+	pid=$!
+	printf '%s\n' "${pid}" >"${job}/pid"
+	printf 'job=%s\n' "${job##*/}"
+}
 
-	if command -v nc >/dev/null 2>&1; then
-		{
-			printf 'AT+CMGF=1\r'
-			sleep 1
-			printf 'AT+CMGS="%s"\r' "${number}"
-			sleep 1
-			printf '%s\032' "${text}"
-		} | run_with_timeout "$((timeout_s + 20))" nc "${host}" "${port}" 2>/dev/null
-		return $?
+sms_job_worker() (
+	local job number body rc
+	job="$(sms_job_path "$1")" || return $?
+	umask 077
+	# A failed/interrupted job is never restarted. Store only non-sensitive
+	# transport diagnostics, not the recipient, body or encoded PDU.
+	trap 'rm -f "${job}/number" "${job}/body"' EXIT
+	trap 'printf "interrupted\n" >"${job}/state"; exit 1' HUP INT TERM
+	printf '%s\n' "$$" >"${job}/pid"
+	printf 'running\n' >"${job}/state"
+	if mt5700m_action_lock; then
+		number="$(cat "${job}/number")"
+		body="$(cat "${job}/body")"
+		rm -f "${job}/number" "${job}/body"
+		at_sms_send "${number}" "${body}" >"${job}/output" 2>"${job}/error"
+		rc=$?
+	else
+		rc=75
+		printf 'Modem busy. No SMS submitted by this job.\n' >"${job}/error"
 	fi
+	printf '%s\n' "${rc}" >"${job}/code"
+	printf 'done\n' >"${job}/state"
+	return "${rc}"
+)
 
-	echo "nc command not found" >&2
-	return 127
+sms_job_status() {
+	local job state pid
+	job="$(sms_job_path "$1")" || return $?
+	state="$(cat "${job}/state" 2>/dev/null)"
+	case "${state}" in
+		queued|running)
+			pid="$(cat "${job}/pid" 2>/dev/null)"
+			case "${pid}" in ''|*[!0-9]*) state=interrupted ;;
+				*) kill -0 "${pid}" 2>/dev/null || state=interrupted ;;
+			esac ;;
+	esac
+	printf 'state=%s\n' "${state}"
+	if [ "${state}" = done ]; then
+		printf 'code=%s\n' "$(cat "${job}/code")"
+		cat "${job}/output" "${job}/error" 2>/dev/null || true
+	fi
 }
 
 first_match() {
@@ -1048,6 +936,8 @@ print_sms_info() {
 }
 
 safe_at_field() {
+	# Reject controls literally; shell patterns '\\r'/'\\n' are not CR/LF.
+	[ "$(printf '%s' "$1" | LC_ALL=C tr -d '[:cntrl:]')" = "$1" ] || return 1
 	case "$1" in
 		*'"'*|*','*|*'\r'*|*'\n'*) return 1 ;;
 	esac
@@ -1110,7 +1000,7 @@ valid_thermal_thresholds() {
 		}'
 }
 
-set_5g_access_mode() {
+set_5g_access_mode() (
 	local preset="$1" values raw previous result rc
 
 	case "${preset}" in
@@ -1120,33 +1010,36 @@ set_5g_access_mode() {
 		*) return 64 ;;
 	esac
 
-	raw="$(at_cmd 'AT+CFUN?' || true)"
+	raw="$(at_cmd 'AT+CFUN?')" || return 1
 	previous="$(printf '%s\n' "${raw}" | first_match 's/^+CFUN:[[:space:]]*//p' | clean_value)"
-	case "${previous}" in 0|1) ;; *) previous=1 ;; esac
+	case "${previous}" in 0|1) ;; *) echo 'Unknown modem function level; refusing change' >&2; return 1 ;; esac
 
 	# C5GOPTION must be written in airplane mode. Restore the prior function
 	# level afterwards; the caller can restart the module when convenient.
+	trap 'at_cmd "AT+CFUN=${previous}" >/dev/null 2>&1' EXIT
+	trap 'exit 1' HUP INT TERM
 	at_cmd 'AT+CFUN=0' >/dev/null || return 1
 	result="$(at_cmd "AT^C5GOPTION=${values}")"
 	rc=$?
-	[ "${previous}" = '0' ] || at_cmd "AT+CFUN=${previous}" >/dev/null 2>&1 || true
+	at_cmd "AT+CFUN=${previous}" >/dev/null || return 1
+	trap - EXIT HUP INT TERM
 	[ -n "${result}" ] && printf '%s\n' "${result}"
 	return "${rc}"
-}
+)
 
 cell_scan_lock_active() {
 	local raw state
 
-	raw="$(at_cmd 'AT^LTEFREQLOCK?' || true)"
+	raw="$(at_cmd 'AT^LTEFREQLOCK?')" || return 0
 	state="$(printf '%s\n' "${raw}" | first_match 's/^\^LTEFREQLOCK:[[:space:]]*//p' | clean_value | cut -d, -f1)"
-	if [ -n "${state}" ] && [ "${state}" != '0' ]; then
+	if [ "${state}" != '0' ]; then
 		echo "LTE frequency or cell lock is active." >&2
 		return 0
 	fi
 
-	raw="$(at_cmd 'AT^NRFREQLOCK?' || true)"
+	raw="$(at_cmd 'AT^NRFREQLOCK?')" || return 0
 	state="$(printf '%s\n' "${raw}" | first_match 's/^\^NRFREQLOCK:[[:space:]]*//p' | clean_value | cut -d, -f1)"
-	if [ -n "${state}" ] && [ "${state}" != '0' ]; then
+	if [ "${state}" != '0' ]; then
 		echo "5G NR frequency or cell lock is active." >&2
 		return 0
 	fi
@@ -1154,7 +1047,7 @@ cell_scan_lock_active() {
 	return 1
 }
 
-run_cell_scan() {
+run_cell_scan() (
 	local previous_timeout raw rc restore_registration
 
 	previous_timeout="${timeout_s}"
@@ -1164,12 +1057,13 @@ run_cell_scan() {
 	restore_cell_scan_registration() {
 		if [ "${restore_registration}" = '1' ]; then
 			timeout_s=20
-			at_cmd 'AT+COPS=0' >/dev/null 2>&1 || true
+			at_cmd 'AT+COPS=0' >/dev/null 2>&1 || return 1
 			timeout_s=150
 		fi
 	}
 
-	trap 'restore_cell_scan_registration' EXIT HUP INT TERM
+	trap 'restore_cell_scan_registration' EXIT
+	trap 'exit 1' HUP INT TERM
 
 	if cell_scan_lock_active; then
 		echo "Remove the active frequency or cell lock before scanning." >&2
@@ -1193,7 +1087,7 @@ run_cell_scan() {
 
 	raw="$(at_cmd 'AT^CELLSCAN=3')"
 	rc=$?
-	restore_cell_scan_registration
+	restore_cell_scan_registration || { echo 'Failed to restore network registration' >&2; return 1; }
 	restore_registration=0
 	timeout_s="${previous_timeout}"
 	trap - EXIT HUP INT TERM
@@ -1209,7 +1103,7 @@ run_cell_scan() {
 	fi
 
 	return 0
-}
+)
 
 cell_scan_prepare_dir() {
 	umask 077
@@ -1259,9 +1153,9 @@ cell_scan_start() {
 	rm -f "${CELL_SCAN_DIR}/pid" "${CELL_SCAN_DIR}/result" "${CELL_SCAN_DIR}/error"
 	printf '%s\n' 'starting' > "${CELL_SCAN_DIR}/state"
 	if command -v nohup >/dev/null 2>&1; then
-		nohup "$0" cellscan-worker >/dev/null 2>&1 </dev/null &
+		MT5700M_ACTION_LOCKED=0 nohup "$0" cellscan-worker 9>&- >/dev/null 2>&1 </dev/null &
 	else
-		"$0" cellscan-worker >/dev/null 2>&1 </dev/null &
+		MT5700M_ACTION_LOCKED=0 "$0" cellscan-worker 9>&- >/dev/null 2>&1 </dev/null &
 	fi
 	pid=$!
 	if ! kill -0 "${pid}" 2>/dev/null; then
@@ -1303,7 +1197,11 @@ cell_scan_result() {
 
 action="${1:-status}"
 case "${action}" in
-	status|temperature|network|cellscan-status|cellscan-result|sms-list|sms-info|system|fota-state|fota-progress|advanced|preview-lock)
+	cellscan-status|cellscan-result|preview-lock|sms-send-worker|sms-send-status) ;;
+	*) mt5700m_action_lock || exit $? ;;
+esac
+case "${action}" in
+	status|temperature|network|cellscan-status|cellscan-result|sms-list|sms-info|sms-send-status|system|fota-state|fota-progress|advanced|preview-lock)
 		;;
 	*)
 		# A write may change values shown by the overview or session cards.
@@ -1347,6 +1245,8 @@ case "${action}" in
 			echo "connected=1"
 		else
 			echo "connected=0"
+			# Do not issue another twenty queries to an absent/unresponsive modem.
+			exit 0
 		fi
 		print_identity
 		print_sim_operator
@@ -1392,10 +1292,20 @@ case "${action}" in
 		shift
 		at_sms_send "${1:-}" "${2:-}"
 		;;
+	sms-send-start)
+		sms_job_start "${2:-}" "${3:-}"
+		;;
+	sms-send-worker)
+		sms_job_worker "${2:-}"
+		;;
+	sms-send-status)
+		sms_job_status "${2:-}"
+		;;
 	sms-delete)
 		shift
-		index="$(printf '%s' "${1:-}" | tr -cd '0-9')"
-		[ -n "${index}" ] || exit 1
+		index="${1:-}"
+		case "${index}" in ''|*[!0-9]*) exit 64 ;; esac
+		[ "${#index}" -le 6 ] || exit 64
 		at_cmd "AT+CMGD=${index}"
 		;;
 	sms-clear)
@@ -1614,20 +1524,28 @@ case "${action}" in
 		;;
 	sms-ims)
 		shift
+		case "${1:-}" in 0|1) ;; *) exit 64 ;; esac
+		# Restore registration after any intermediate failure, preserving its
+		# exit status instead of leaving the modem in airplane mode.
+		trap 'rc=$?; trap - EXIT; at_cmd "AT+CFUN=1" >/dev/null 2>&1; exit "$rc"' EXIT
+		trap 'exit 130' INT
+		trap 'exit 143' TERM
 		case "${1:-}" in
 			1)
 				at_cmd 'AT+CFUN=0' >/dev/null || exit 1
 				at_cmd 'AT+CGDCONT=5,"IPV4V6","ims","",0,0,0,0,1,1,1,,,,,,0,,0,0,0,0' >/dev/null || exit 1
 				at_cmd 'AT+CEUS=0' >/dev/null || exit 1
 				at_cmd 'AT^IMSSWITCH=1,0,0' >/dev/null || exit 1
-				at_cmd 'AT+CFUN=1'
+				at_cmd 'AT+CFUN=1' || exit 1
+				trap - EXIT INT TERM
 				;;
 			0)
 				at_cmd 'AT+CFUN=0' >/dev/null || exit 1
 				at_cmd 'AT+CGDCONT=5,"IPV4V6","","",0,0,0,0,1,1,1,,,,,,0,,0,0,0,0' >/dev/null || exit 1
 				at_cmd 'AT+CEUS=1' >/dev/null || exit 1
 				at_cmd 'AT^IMSSWITCH=0,0,0' >/dev/null || exit 1
-				at_cmd 'AT+CFUN=1'
+				at_cmd 'AT+CFUN=1' || exit 1
+				trap - EXIT INT TERM
 				;;
 			*) exit 64 ;;
 		esac

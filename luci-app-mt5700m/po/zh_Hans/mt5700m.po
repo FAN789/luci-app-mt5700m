@@ -2554,3 +2554,36 @@ msgstr "查看连接详情"
 
 msgid "View radio and cell details"
 msgstr "查看无线与小区详情"
+
+msgid "Submitting SMS"
+msgstr "正在提交短信"
+
+msgid "Waiting for modem confirmation (up to 120 seconds per part). Do not send again."
+msgstr "正在等待模组确认（每段最多 120 秒），请勿重复发送。"
+
+msgid "Browser storage is unavailable. No message was sent."
+msgstr "浏览器存储不可用，本次未发送短信。"
+
+msgid "SMS result needs checking"
+msgstr "需要核实短信结果"
+
+msgid "Check the recipient and wait for any running task to finish before clearing the pending state. Clearing does not send a message."
+msgstr "请先核实收件情况，并等待仍在运行的任务结束，再清除待确认状态。清除状态不会发送短信。"
+
+msgid "Keep pending"
+msgstr "保留待确认状态"
+
+msgid "I checked; clear pending state"
+msgstr "已核实，清除待确认状态"
+
+msgid "Cellular Internet verified"
+msgstr "蜂窝互联网探测已通过"
+
+msgid "Cellular Internet not yet verified"
+msgstr "蜂窝互联网尚未验证通过"
+
+msgid "Link registration alone does not prove Internet access. Recovery is rate-limited."
+msgstr "注册成功或接口连接不等于能上网；自动恢复设有冷却和次数限制。"
+
+msgid "SMS storage is nearly full. Review and delete only messages you no longer need; existing messages are never deleted automatically."
+msgstr "短信存储空间即将用满。请检查并仅删除不再需要的短信；插件不会自动删除已有短信。"

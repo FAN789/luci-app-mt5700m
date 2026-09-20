@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   push:
   pull_request:
 
@@ -32,6 +33,13 @@ jobs:
           sh luci-app-mt5700m/tests/test-usb-detection.sh
           sh luci-app-mt5700m/tests/test-temperature-cache.sh
           sh luci-app-mt5700m/tests/test-read-cache.sh
+          sh luci-app-mt5700m/tests/test-command-contract.sh
+          sh luci-app-mt5700m/tests/test-hotplug-debounce.sh
+          sh luci-app-mt5700m/tests/test-traffic-interface.sh
+      - name: Test native transport with simulated modem
+        run: |
+          gcc -O2 -Wall -Wextra -Werror mt5700m-transport/src/transport.c -o /tmp/mt5700m-transport-test
+          TRANSPORT_BIN=/tmp/mt5700m-transport-test python3 mt5700m-transport/tests/test_transport.py -v
       - name: Check executable service files
         run: |
           test -x luci-app-mt5700m/root/usr/sbin/mt5700m-read
@@ -42,6 +50,15 @@ jobs:
           test -x luci-app-mt5700m/root/etc/uci-defaults/92-mt5700m-traffic
       - name: Check LuCI JavaScript syntax
         run: find luci-app-mt5700m/htdocs -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Check UI failure handling and SMS decoding
+        run: |
+          node tests/test-ui-errors.js
+          node tests/test-sms-decode.js
+          sh tests/test-action-lock.sh
+          sh tests/test-sms-jobs.sh
+          sh tests/test-health.sh
+          sh tests/test-profile-rollback.sh
+          node tests/test-sms-ui.js
       - name: Validate JSON metadata
         run: |
           jq empty luci-app-mt5700m/root/usr/share/luci/menu.d/luci-app-mt5700m.json

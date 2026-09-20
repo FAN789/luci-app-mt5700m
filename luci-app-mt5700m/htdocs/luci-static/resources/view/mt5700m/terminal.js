@@ -43,7 +43,7 @@ return view.extend({
 		this.appendOutput(output, cmd, '>>>');
 		input.value = '';
 
-		return fs.exec('/usr/sbin/mt5700m-at', [ 'command', cmd ]).then(function(res) {
+		return controls.exec('/usr/sbin/mt5700m-at', [ 'command', cmd ]).then(function(res) {
 			self.appendOutput(output, res.stdout || _('No response.'), '<<<');
 			if (res.stderr)
 				self.appendOutput(output, res.stderr, 'ERR');

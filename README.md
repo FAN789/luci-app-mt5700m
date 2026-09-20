@@ -3,63 +3,73 @@
 [![CI](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/ci.yml/badge.svg)](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/ci.yml)
 [![Build Release](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml/badge.svg)](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml)
 
-专门面向鼎桥（TD Tech）MT5700M-CN 5G 模组的 OpenWrt LuCI 管理器。它把状态、移动
-数据、网络与小区、短信、系统维护和 AT 终端统一到一个应用中，并按照 MT5700M
-手册识别 USB 正常、升级和 Dump 模式。
+面向鼎桥（TD Tech）MT5700M-CN 5G 模组的 OpenWrt LuCI 管理插件。
+当前发布版本 **v3.0.0**：应用 `3.0.0-r7`，原生传输程序 `1.0.0-r6`。
+这是插件包，不是整机固件，不包含个人网络配置、短信、SIM 数据或登录凭据。
 
-版本采用标准的 `主版本.次版本.修订版本-r打包修订` 格式。`2.2.0` 按最终用户的
-使用路径重构了信息架构；当前开发版本为 `v2.3.3`，OpenWrt 安装包为
-`2.3.3-r1`。该版本为首页的模组状态和数据会话增加安全的短时快照缓存，并在
-守护进程启动后预热并保持更新；页面可以立即读取最近状态，过期快照由后台刷新，所有写操作
-会主动失效缓存。它同时保留小区扫描的离网、长时后台扫描与自动恢复注册流程，
-并将扫描结果整理为可读表格；同时对复合 USB 热插拔事件进行防抖，避免启动时
-重复绑定模组导致 LAN DHCPv4 获取延迟。管理器还会在主机升级或重启而模组未断电
-时按当前 APN/PDP 配置同步一次完整数据会话，恢复 USB NCM 载波、DHCP 与实际
-数据转发。流量接口改为动态识别，
-并把状态查询与可写 AT 操作分权；未出现在官方手册且实体模块不支持的 Direct IP
-控件已移除。
+## 3.0.0 更新
 
-## 主要功能
+- 自有 C 程序 `mt5700m-transport` 负责串口/TCP AT 和短信传输；运行时不再依赖 `ubus-at-daemon`、`sms-tool_q` 或 QModem 服务。
+- 按 MT5700M 命令格式修复短信发送；后台发送任务显示进度和明确结果，确认不明时不自动重发，以免重复发送和计费。
+- 支持中文及 emoji 的 UTF-16 编码、多段短信和代理对边界检查。发送成功确认不等于运营商投递报告。
+- 整个模组操作串行化、缓存发布锁、串口同步探测及超时隔离，降低并发操作和迟到响应造成的误判。
+- APN/自动拨号变更先保存旧配置，写入后核对；失败或中断后使用持久日志恢复。
+- 区分“数据链路已连接”和“互联网验证通过”；检测蜂窝租约不一致及联网失败，先续租、再按条件恢复数据会话，并设置冷却时间和每小时次数上限。
+- 修复 BusyBox 环境等待兼容性和服务实例管理；短信空间接近满额时提示，不自动删除旧短信。
+- 新安装默认使用蜂窝 IPv4/IPv6 双栈。升级保留已有用户配置，不强制覆盖 PDP/APN。运营商是否提供 IPv6 取决于 SIM、APN 与网络。
 
-- 首页优先展示信号质量、载波聚合、IPv4/IPv6 与移动流量
-- 网关、DNS、PDP 会话和模组原生计数集中到“移动数据”页面
-- 模组身份、手机号、SIM 信息和签约速率集中到“模组与 SIM 卡”页面
-- RSRP/RSRQ/SINR 等信号质量的人性化显示
-- APN、PDP、漫游和移动数据连接管理
-- 网络制式、LTE/WCDMA 频段及小区锁定
-- 短信收发与联系人友好的列表界面
-- IMEI、手机号、签约速率、USB/网口状态及系统维护
-- 高级页面统一收纳 USB/PCIe、通信诊断和 MT5700M 专用 AT 终端入口
-- 定期缓存模组温度，供 H5000M 风扇控制等本机组件低开销共享
-- 简体中文界面；不依赖云服务，不上传模组或 SIM 数据
+## 功能与边界
 
-流量历史由应用直接读取 MT5700M 数据接口的内核计数，不依赖 `vnStat`，并保存在
-`/etc/mt5700m/traffic-history`。升级自早期独立流量插件时会自动迁移已有记录；不再
-安装或显示单独的“流量统计”应用。
+提供信号、载波聚合、模组/SIM 状态、APN/PDP、连接与重拨、网络制式与频段、小区查询、短信、流量历史、温度缓存及 AT 终端。
+流量历史保存在 `/etc/mt5700m/traffic-history`；短信发送历史为浏览器本地记录，支持现有导入/导出功能，不是跨设备同步服务。
 
-## 安装和编译
+蜂窝 WAN IPv6 与 LAN IPv6 分发是不同设置。插件不擅自开启或禁用 LAN 的 RA/DHCPv6/NDP，也不替用户改变代理软件的 IPv6 策略。
+健康检查使用蜂窝接口访问公共 HTTPS 端点；不提交短信、身份信息或凭据，但端点会像普通网页访问一样看到来源 IP。
+当前健康检查不是独立的 IPv6 可达性验收；不能把健康状态当成所有 IPv6 目的站点均可达的保证。
 
-源码包位于 `luci-app-mt5700m/`：
+## 验证情况
+
+H5000M + KWRT（Linux 6.12.108）实机已验证 AT 查询、管理服务自启动、蜂窝 IPv4 HTTPS、断线/租约恢复、APN 失败回滚、整机重启及断电冷启动。
+单段短信已由接收端确认收到；emoji 编码做过模组存储/读取验证，未据此宣称真实多段/emoji 投递已验收。
+蜂窝 IPv6 地址和路由、指定 IPv6 端点的 TLS/HTTP 已验证，不代表所有 IPv6 域名解析和站点均已通过。
+
+自动测试包含 19 项原生传输模拟测试、shell 回归、UI 错误处理、短信解码/任务、健康恢复和配置回滚测试。
+多日运行、所有运营商组合和具有破坏性的高级设置未穷尽测试；无标签 AT 协议也无法保证任意迟到响应都能绝对隔离。
+修改频段、SIM/PIN、固件或发送短信前，应明确了解断网、数据丢失和计费风险。
+
+## 安装
+
+在 [Releases](https://github.com/FAN789/luci-app-mt5700m/releases) 下载对应构建的归档并核对 SHA256。
+自动构建提供 `mediatek/filogic` 的两套独立产物：OpenWrt 24.10.8 SDK 的 IPK，以及 25.12.5 SDK 的 APK。
+每套包含应用、简体中文包、`mt5700m-transport` 和校验文件；APK 构建另附签名公钥。
+原生传输包面向 `aarch64_cortex-a53`；LuCI 页面虽为架构无关包，仍依赖匹配的原生传输包。
+
+1. 备份配置，确认设备架构、libc/用户空间 ABI 和包管理器。不要同时安装 IPK/APK，不要强制跳过依赖。
+2. 从**当前固件的软件源**安装 USB 驱动：`kmod-usb3`、`kmod-usb-serial`、`kmod-usb-serial-option`、`kmod-usb-net`、`kmod-usb-net-cdc-ether`、`kmod-usb-net-cdc-ncm`。不得跨内核复制驱动。
+3. 确认有 `luci-base`、`flock`、`curl` 与 DHCPv6 客户端 `odhcp6c`。`curl` 用于联网健康探测；缺少时不会盲目触发网络恢复。
+4. 安装对应格式的传输包、应用包和中文包。APK 公钥只应在核对来源后加入系统信任目录，不要使用跳过签名检查选项。
+5. 停止其他会占用同一 AT 串口的模组管理服务，再在 LuCI 中配置并启用本插件。首次启用或升级可能触发拨号，需预留维护窗口。
+
+KWRT 等衍生固件可能保留不同包格式/依赖版本，不能仅凭版本名称判断兼容性。自动发布包仍需在目标系统确认依赖；实机验证不等于所有衍生固件通用认证。
+
+## 源码编译与自动发布
 
 ```sh
 git clone https://github.com/FAN789/luci-app-mt5700m.git
 cp -a luci-app-mt5700m/luci-app-mt5700m /path/to/openwrt/package/
+cp -a luci-app-mt5700m/mt5700m-transport /path/to/openwrt/package/
+cd /path/to/openwrt
 make menuconfig
 # LuCI -> Applications -> luci-app-mt5700m
+make package/mt5700m-transport/compile V=s
 make package/luci-app-mt5700m/compile V=s
 ```
 
-应用依赖 `ubus-at-daemon`、`sms-tool_q` 及 OpenWrt 官方 USB 串口/网卡内核模块。
-每个 GitHub Release 均由 GitHub Actions 使用官方 OpenWrt SNAPSHOT
-`mediatek/filogic` SDK 在线构建，附带应用、中文包、两个底层传输包、SDK 构建公钥
-和 SHA256 校验文件。安装时必须使用与设备固件 ABI/内核版本相匹配的软件源。
+推送与 PR 运行 CI；推送匹配应用版本的 `v*` 标签会先执行测试，再通过官方 SDK 自动编译并发布 Release。
+手动运行 Build Release 只保存 Actions 产物，不创建版本。SDK 下载校验和及构建信息随产物保留；签名私钥不发布。
+`scripts/build-native-preview.py` 仅用于本地实验包，不能替代 SDK 正式构建与目标系统验收。
 
-## 设计边界
-
-本项目不是通用蜂窝模组框架，只实现 MT5700M 所需的能力。低层 AT 与短信传输
-包来自固定版本的 [FUjr/QModem](https://github.com/FUjr/QModem)，应用内的精简
-实现保留了来源说明，详见
-[`QMODEM-NOTICE`](luci-app-mt5700m/root/usr/share/mt5700m/QMODEM-NOTICE)。
-该部分受其上游 MPL-2.0 和非商业限制约束，适用于个人、非商业用途。
+## 来源与许可
 
 本仓库自行编写的代码按 [Apache License 2.0](LICENSE) 发布。
+历史上参考/精简 QModem 行为的部分仍保留 [QMODEM-NOTICE](luci-app-mt5700m/root/usr/share/mt5700m/QMODEM-NOTICE) 的来源及许可边界；移除运行依赖不等于移除历史归属说明。

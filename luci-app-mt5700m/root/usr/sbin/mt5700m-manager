@@ -11,6 +11,9 @@ NDIS_SYNC_MARKER="${STATE_DIR}/ndis-session-synchronized"
 NDIS_RECOVERY_MARKER="${STATE_DIR}/ndis-recovery-attempted"
 INTERFACE='MT5700M'
 INTERFACE6='MT5700Mv6'
+. "${MT5700M_LOCK_HELPER:-$(dirname "$0")/../share/mt5700m/lock.sh}"
+. "${MT5700M_HEALTH_HELPER:-$(dirname "$0")/../share/mt5700m/health.sh}"
+. "${MT5700M_PROFILE_HELPER:-$(dirname "$0")/../share/mt5700m/profile.sh}"
 
 [ -r "${USB_HELPER}" ] && . "${USB_HELPER}"
 
@@ -22,20 +25,9 @@ log_message() {
 }
 
 acquire_lock() {
-	local owner
-	if mkdir "${LOCK_DIR}" 2>/dev/null; then
-		echo "$$" > "${LOCK_DIR}/pid"
-		return 0
-	fi
-	owner="$(cat "${LOCK_DIR}/pid" 2>/dev/null || true)"
-	case "${owner}" in ''|*[!0-9]*) owner='' ;; esac
-	if [ -z "${owner}" ] || ! kill -0 "${owner}" 2>/dev/null; then
-		rm -rf "${LOCK_DIR}" 2>/dev/null
-		mkdir "${LOCK_DIR}" 2>/dev/null || return 1
-		echo "$$" > "${LOCK_DIR}/pid"
-		return 0
-	fi
-	return 1
+	umask 077
+	exec 8>"${LOCK_DIR}.flock" || return 1
+	flock -n 8
 }
 
 acquire_lock_wait() {
@@ -48,7 +40,7 @@ acquire_lock_wait() {
 }
 
 release_lock() {
-	rm -rf "${LOCK_DIR}" 2>/dev/null
+	exec 8>&-
 }
 
 bool_value() {
@@ -283,12 +275,13 @@ apply_profile() {
 	username="$(config_value username '')"
 	password="$(config_value password '')"
 	auth="$(config_value auth none)"
-	case "${auth}" in pap) auth_code=1 ;; chap) auth_code=2 ;; *) auth_code=0 ;; esac
+	case "${auth}" in pap) auth_code=1 ;; chap) auth_code=2 ;; auto) auth_code=3 ;; *) auth_code=0 ;; esac
 	# The MT5700M manual requires the previous auto-dial profile to be
 	# cancelled before a replacement is accepted.
-	"${AT_HELPER}" advanced-set autodial 0 >/dev/null || return 1
-	sleep 1
-	"${AT_HELPER}" advanced-set autodial 1 1 "${protocol}" "${apn}" "${username}" "${password}" "${auth_code}" >/dev/null
+	apply_profile_transaction "1,1,\"${protocol}\",\"${apn}\",\"${username}\",\"${password}\",${auth_code}" || {
+		[ -f "$PROFILE_JOURNAL" ] || sync_manager
+		return 1
+	}
 }
 
 set_ndis_session() {
@@ -344,10 +337,10 @@ connect_manager() {
 	set_if_changed mt5700m.connection.enabled 1
 	[ "${CONFIG_CHANGED}" = '0' ] || uci -q commit mt5700m
 	sync_manager || return 1
-	apply_profile || log_message 'module profile was not changed; continuing with retained profile'
-	set_ndis_session 0 || true
+	apply_profile || { log_message 'profile update failed'; bring_up; return 1; }
+	set_ndis_session 0 || return 1
 	sleep 2
-	set_ndis_session 1 || log_message 'unable to start MT5700M NDIS session'
+	set_ndis_session 1 || { log_message 'unable to start MT5700M NDIS session'; bring_up; return 1; }
 	mkdir -p "${STATE_DIR}"
 	touch "${NDIS_SYNC_MARKER}" "${NDIS_RECOVERY_MARKER}"
 	bring_up
@@ -372,7 +365,7 @@ redial_manager() {
 	set_if_changed mt5700m.connection.enabled 1
 	[ "${CONFIG_CHANGED}" = '0' ] || uci -q commit mt5700m
 	sync_manager || return 1
-	apply_profile || log_message 'module profile was not changed during redial'
+	apply_profile || { log_message 'profile update failed during redial'; set_ndis_session 1 || true; bring_up; return 1; }
 	set_ndis_session 1 || return 1
 	mkdir -p "${STATE_DIR}"
 	touch "${NDIS_SYNC_MARKER}" "${NDIS_RECOVERY_MARKER}"
@@ -401,6 +394,8 @@ status_json() {
 	json_add_boolean ipv4_up "${up4}"
 	json_add_boolean ipv6_up "${up6}"
 	json_add_boolean carrier "${carrier}"
+	json_add_string health_status "$(health_get state)"
+	json_add_boolean internet_verified "$([ "$(health_get state)" = healthy ] && [ $(($(health_now)-$(health_get verified))) -lt 180 ] && echo 1 || echo 0)"
 	json_add_string usb_state "${state}"
 	json_add_string usb_pid "${product}"
 	json_add_string usb_slot "${slot}"
@@ -426,8 +421,13 @@ refresh_read_caches() {
 monitor_manager() {
 	while :; do
 		if acquire_lock; then
-			sync_manager >/dev/null 2>&1 || true
-			recover_ndis_link >/dev/null 2>&1 || true
+			(
+				mt5700m_action_lock || exit $?
+				recover_profile_transaction || exit 1
+				sync_manager >/dev/null 2>&1 || true
+				recover_ndis_link >/dev/null 2>&1 || true
+				check_data_health >/dev/null 2>&1 || true
+			)
 			release_lock
 		fi
 		refresh_temperature_cache >/dev/null 2>&1 || true
@@ -446,13 +446,17 @@ case "${action}" in
 	log) tail -n 120 "${LOG_FILE}" 2>/dev/null || true ;;
 	*)
 		acquire_lock_wait || { echo 'manager is busy' >&2; exit 2; }
-		trap release_lock EXIT INT TERM
+		trap release_lock EXIT
+		trap 'exit 1' INT TERM
+		mt5700m_action_lock || exit $?
+		recover_profile_transaction || exit 1
 		case "${action}" in
 			sync) sync_manager ;;
 			connect) connect_manager ;;
 			disconnect) disconnect_manager ;;
 			redial) redial_manager ;;
 			recover-ndis) recover_ndis_link ;;
+			check-health) check_data_health ;;
 			down) bring_down ;;
 			*) echo "Usage: $0 {status-json|sync|connect|disconnect|redial|recover-ndis|refresh-temperature|log|monitor}" >&2; exit 64 ;;
 		esac

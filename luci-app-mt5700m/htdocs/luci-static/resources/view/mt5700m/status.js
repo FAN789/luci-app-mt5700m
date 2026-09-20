@@ -42,8 +42,8 @@ return view.extend({
 	load: function() {
 		return callManagerStatus().catch(function() { return {}; }).then(function(manager) {
 			return Promise.all([
-				fs.exec('/usr/sbin/mt5700m-read', [ 'status' ]).catch(function(err) { return { stdout:'', stderr:err.message || String(err) }; }),
-				fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'session' ]).catch(function(err) { return { stdout:'', stderr:err.message || String(err) }; }),
+				controls.exec('/usr/sbin/mt5700m-read', [ 'status' ]).catch(function(err) { return { stdout:'', stderr:err.message || String(err) }; }),
+				controls.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'session' ]).catch(function(err) { return { stdout:'', stderr:err.message || String(err) }; }),
 				callTraffic().catch(function() { return { interfaces:[] }; })
 			]).then(function(results) {
 				return { native:results[0], session:results[1], traffic:results[2], manager:manager };
@@ -220,7 +220,7 @@ return view.extend({
 		var usbNames = { upgrade:_('Upgrade mode'), dump:_('Dump mode'), unknown:_('Unknown USB mode') };
 		var abnormalUsb = data.usb_state === 'upgrade' || data.usb_state === 'dump' || data.usb_state === 'unknown';
 		return E('div', { 'class':'mt5700m-page mt-ui-page' }, [
-			this.styleNode(), controls.styleNode(),
+			this.styleNode(), controls.styleNode(), controls.healthNode(res.manager),
 			data.error ? E('div', { 'class':'alert-message warning mt5700m-alert' }, data.error) : null,
 			res.session && res.session.stderr ? E('div', { 'class':'alert-message warning mt5700m-alert' }, res.session.stderr) : null,
 			abnormalUsb ? E('div', { 'class':'alert-message warning mt5700m-alert' }, _('The MT5700M is in %s. Mobile data and AT management are unavailable until normal mode returns.').format(usbNames[data.usb_state])) : null,

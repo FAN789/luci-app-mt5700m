@@ -111,7 +111,7 @@ function confirmRun(title, message, args, restartRequired) {
 				'class': 'btn cbi-button-negative',
 				'click': function() {
 					ui.hideModal();
-					fs.exec('/usr/sbin/mt5700m-at', args).then(function() {
+					execChecked('/usr/sbin/mt5700m-at', args).then(function() {
 						ui.addNotification(null, E('p', {}, _('Settings applied.')));
 						window.setTimeout(function() { window.location.reload(); }, 900);
 					}, function(err) {
@@ -123,8 +123,85 @@ function confirmRun(title, message, args, restartRequired) {
 	]);
 }
 
+function execChecked(path, args) {
+	return fs.exec(path, args).then(function(result) {
+		if (!result || result.code !== 0)
+			throw new Error(result && result.stderr ? result.stderr.trim() : _('Command failed.'));
+		return result;
+	});
+}
+
+var smsBusy = false;
+var smsPendingKey = 'mt5700m.sms.pending-job';
+
+function pollSmsJob(job, attempt) {
+	return execChecked('/usr/sbin/mt5700m-read', [ 'sms-send-status', job ]).then(function(result) {
+		var output = result.stdout || '', state = (output.match(/^state=(.*)$/m) || [])[1];
+		if (state === 'done') {
+			window.localStorage.removeItem(smsPendingKey);
+			if (!/^code=0$/m.test(output)) throw new Error(output.replace(/^state=.*\n|^code=.*\n/gm, '').trim() || _('SMS submission failed.'));
+			return result;
+		}
+		if ((state !== 'queued' && state !== 'running') || attempt >= 1500)
+			throw new Error(_('SMS result is unknown. Check the recipient before resending.'));
+		return new Promise(function(resolve) { window.setTimeout(resolve, 1000); }).then(function() { return pollSmsJob(job, attempt + 1); });
+	});
+}
+
+function sendSms(number, body) {
+	if (smsBusy) return Promise.reject(new Error(_('A message is already being submitted.')));
+	var pending;
+	try { pending = window.localStorage.getItem(smsPendingKey); }
+	catch (error) { return Promise.reject(new Error(_('Browser storage is unavailable. No message was sent.'))); }
+	smsBusy = true;
+	ui.showModal(_('Submitting SMS'), [ E('p', { 'class': 'spinning' }, _('Waiting for modem confirmation (up to 120 seconds per part). Do not send again.')) ]);
+	var task;
+	if (pending) {
+		// After navigation/reload, resolve the previous job, never send a new
+		// recipient/body while its outcome is still unknown.
+		task = (pending === 'unknown' ? Promise.reject(new Error(_('SMS result is unknown. Check the recipient before resending.'))) : pollSmsJob(pending, 0)).then(function() {
+			throw new Error(_('The previous message was submitted. No new message was sent.'));
+		});
+	} else {
+		task = Promise.resolve().then(function() {
+			// Persist intent BEFORE RPC: a lost start reply must not enable a
+			// second submission after a refresh.
+			window.localStorage.setItem(smsPendingKey, 'unknown');
+			return execChecked('/usr/sbin/mt5700m-at', [ 'sms-send-start', number, body ]);
+		}).then(function(result) {
+			var job = (result.stdout || '').match(/^job=(job\.[a-zA-Z0-9]{6})$/m);
+			if (!job) throw new Error(_('No SMS job confirmation received. Do not resend automatically.'));
+			window.localStorage.setItem(smsPendingKey, job[1]);
+			return pollSmsJob(job[1], 0);
+		});
+	}
+	return task.then(function(result) { smsBusy = false; ui.hideModal(); return result; }, function(error) {
+		smsBusy = false; ui.hideModal();
+		var unresolved = false;
+		try { unresolved = !!window.localStorage.getItem(smsPendingKey); } catch (ignored) {}
+		if (unresolved) ui.showModal(_('SMS result needs checking'), [
+			E('p', {}, _('Check the recipient and wait for any running task to finish before clearing the pending state. Clearing does not send a message.')),
+			E('div', { 'class': 'right' }, [
+				E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Keep pending')),
+				E('button', { 'class': 'btn', 'click': function() { window.localStorage.removeItem(smsPendingKey); ui.hideModal(); } }, _('I checked; clear pending state'))
+			])
+		]);
+		throw error;
+	});
+}
+
 function row(label, input) {
 	return E('div', { 'class': 'mt-control-row' }, [ E('label', {}, label), input ]);
+}
+function healthNode(manager) {
+	manager = manager || {};
+	var state = manager.health_status || 'unknown';
+	var good = manager.internet_verified === true;
+	return E('div', { 'class': 'alert-message ' + (good ? 'notice' : 'warning') }, [
+		E('strong', {}, good ? _('Cellular Internet verified') : _('Cellular Internet not yet verified')),
+		' — ', E('span', {}, state),
+		good ? '' : ' — ' + _('Link registration alone does not prove Internet access. Recovery is rate-limited.')
+	]);
 }
 
 function action(label, handler) {
@@ -163,6 +240,9 @@ function styleNode() {
 }
 
 return baseclass.extend({
+	exec: execChecked,
+	sendSms: sendSms,
+	healthNode: healthNode,
 	section: section,
 	pick: pick,
 	csvValues: csvValues,

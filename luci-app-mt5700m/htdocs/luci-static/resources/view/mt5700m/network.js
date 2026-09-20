@@ -183,10 +183,10 @@ function parseServingCell(values) {
 return view.extend({
 	load: function() {
 		return Promise.all([
-			fs.exec('/usr/sbin/mt5700m-read', [ 'network' ]).catch(function(err) {
+			controls.exec('/usr/sbin/mt5700m-read', [ 'network' ]).catch(function(err) {
 				return { stdout: '', stderr: err.message || String(err) };
 			}),
-			fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'radio' ]).catch(function(err) {
+			controls.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'radio' ]).catch(function(err) {
 				return { stdout: '', stderr: err.message || String(err) };
 			})
 		]);
@@ -287,10 +287,10 @@ return view.extend({
 		]));
 
 		function poll() {
-			return fs.exec('/usr/sbin/mt5700m-read', [ 'cellscan-status' ]).then(function(result) {
+			return controls.exec('/usr/sbin/mt5700m-read', [ 'cellscan-status' ]).then(function(result) {
 				var state = stateValue(result.stdout);
 				if (state === 'done' || state === 'error') {
-					return fs.exec('/usr/sbin/mt5700m-read', [ 'cellscan-result' ]).then(function(scan) {
+					return controls.exec('/usr/sbin/mt5700m-read', [ 'cellscan-result' ]).then(function(scan) {
 						if (state === 'error')
 							throw new Error((scan.stdout || scan.stderr || _('Cell scan failed.')).replace(/^state=error\s*/m, '').trim());
 						self.showCellScanResult(scan.stdout || '');
@@ -304,7 +304,7 @@ return view.extend({
 			});
 		}
 
-		return fs.exec('/usr/sbin/mt5700m-at', [ 'cellscan-start' ]).then(function() {
+		return controls.exec('/usr/sbin/mt5700m-at', [ 'cellscan-start' ]).then(function() {
 			return poll();
 		}).catch(function(err) {
 			ui.showModal(_('Cell Scan'), [
@@ -335,7 +335,7 @@ return view.extend({
 				if(rat==='nr'&&(t==='1'||t==='2')&&!csvInRange(values[2],0,4))return ui.addNotification(null,E('p',{},_('NR SCS type must be between 0 and 4.')),'warning');
 				if(t==='2'&&!csvInRange(values[3],0,rat==='nr'?1007:503))return ui.addNotification(null,E('p',{},_('PCI is outside the valid range for the selected radio technology.')),'warning');
 				var args=rat==='nr'?['lock',rat,t,values[0],values[1],values[2],values[3]]:['lock',rat,t,values[0],values[1],values[3]];
-				ui.showModal(_('Confirm frequency change'),[E('p',{},[t==='0'?_('Remove the current %s frequency lock?').format(rat.toUpperCase()):_('Apply this %s frequency lock? Mobile connectivity may reconnect.').format(rat.toUpperCase()),' ',_('Mobile service will disconnect briefly while the module enters airplane mode.')]),E('div',{'class':'right'},[E('button',{'type':'button','class':'btn','click':ui.hideModal},_('Cancel')),' ',E('button',{'type':'button','class':'btn cbi-button-negative','click':function(){ui.hideModal();fs.exec('/usr/sbin/mt5700m-at',args).then(function(){ui.addNotification(null,E('p',{},_('Frequency lock updated.')));window.setTimeout(function(){window.location.reload();},2500);},function(err){ui.addNotification(null,E('p',{},err.message||_('The modem rejected this setting.')),'danger');});}},t==='0'?_('Remove Lock'):_('Apply Lock'))])]);
+				ui.showModal(_('Confirm frequency change'),[E('p',{},[t==='0'?_('Remove the current %s frequency lock?').format(rat.toUpperCase()):_('Apply this %s frequency lock? Mobile connectivity may reconnect.').format(rat.toUpperCase()),' ',_('Mobile service will disconnect briefly while the module enters airplane mode.')]),E('div',{'class':'right'},[E('button',{'type':'button','class':'btn','click':ui.hideModal},_('Cancel')),' ',E('button',{'type':'button','class':'btn cbi-button-negative','click':function(){ui.hideModal();controls.exec('/usr/sbin/mt5700m-at',args).then(function(){ui.addNotification(null,E('p',{},_('Frequency lock updated.')));window.setTimeout(function(){window.location.reload();},2500);},function(err){ui.addNotification(null,E('p',{},err.message||_('The modem rejected this setting.')),'danger');});}},t==='0'?_('Remove Lock'):_('Apply Lock'))])]);
 		}
 		type.addEventListener('change',update);
 		var body=[field('type',_('Lock Type'),type,_('Choose the least restrictive mode that meets your need.')),field('bands',_('Bands'),bands,_('Use numbers separated by commas.')),field('arfcns',_('ARFCNs'),arfcns,_('One ARFCN for each band.'))];
@@ -427,7 +427,7 @@ return view.extend({
 		var diagnosticHost = E('div', { 'class':'mt-net-diagnostics' }, E('div', { 'class':'alert-message notice' }, _('Loading detailed radio diagnostics…')));
 		var self = this;
 		window.setTimeout(function() {
-			fs.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'radio-diagnostics' ]).then(function(result) {
+			controls.exec('/usr/sbin/mt5700m-read', [ 'advanced', 'radio-diagnostics' ]).then(function(result) {
 				dom.content(diagnosticHost, self.radioDiagnostics(result.stdout || ''));
 			}, function(err) {
 				dom.content(diagnosticHost, E('div', { 'class':'alert-message warning' }, err.message || String(err)));

@@ -10,7 +10,7 @@ service_triggers() {
 
 start_service() {
 	/usr/sbin/mt5700m-manager sync >/dev/null 2>&1 || true
-	procd_open_instance
+	procd_open_instance main
 	procd_set_param command /usr/sbin/mt5700m-manager monitor
 	procd_set_param respawn 3600 5 5
 	procd_set_param stdout 0

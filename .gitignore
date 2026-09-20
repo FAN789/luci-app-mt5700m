@@ -1,3 +1,9 @@
 dist-release/
 dist/
 .DS_Store
+__pycache__/
+preview-signing-keys/
+*.key
+*.pem
+*.ipk
+*.apk

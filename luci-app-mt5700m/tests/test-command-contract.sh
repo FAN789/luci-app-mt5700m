@@ -27,9 +27,11 @@ case "${key}" in
 esac
 EOF
 
-cat > "${TMP}/bin/nc" <<'EOF'
+cat > "${TMP}/bin/mt5700m-transport" <<'EOF'
 #!/bin/sh
-command="$(tr -d '\r\n')"
+while [ "$1" != "at" ]; do shift; done
+shift
+command="$1"
 printf '%s\n' "${command}" >> "${MT5700M_TEST_LOG}"
 case "${command}" in
 	'AT^LTEFREQLOCK?')
@@ -50,7 +52,7 @@ case "${command}" in
 esac
 EOF
 
-chmod 0755 "${TMP}/bin/uci" "${TMP}/bin/nc"
+chmod 0755 "${TMP}/bin/uci" "${TMP}/bin/mt5700m-transport"
 export PATH="${TMP}/bin:${PATH}"
 export MT5700M_TEST_LOG="${TMP}/commands"
 export MT5700M_USB_HELPER="${ROOT}/root/usr/share/mt5700m/usb.sh"

@@ -31,7 +31,7 @@ function subscriptionRate(value) {
 
 return view.extend({
 	load: function() {
-		return fs.exec('/usr/sbin/mt5700m-read', [ 'system' ]).catch(function(err) { return { stdout: '', stderr: err.message || String(err) }; });
+		return controls.exec('/usr/sbin/mt5700m-read', [ 'system' ]).catch(function(err) { return { stdout: '', stderr: err.message || String(err) }; });
 	},
 
 	styleNode: function() {
@@ -63,7 +63,7 @@ return view.extend({
 				E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')), ' ',
 				E('button', { 'class': 'btn ' + (danger ? 'cbi-button-negative' : 'cbi-button-apply'), 'click': function() {
 					ui.hideModal();
-					fs.exec('/usr/sbin/mt5700m-at', args).then(function() {
+					controls.exec('/usr/sbin/mt5700m-at', args).then(function() {
 						ui.addNotification(null, E('p', {}, recoveryDelay ? _('Restart accepted. The USB interface normally returns in about 22 seconds.') : _('Command accepted by the modem.')));
 						window.setTimeout(function() { window.location.reload(); }, recoveryDelay || 1500);
 					}, function(err) { ui.addNotification(null, E('p', {}, err.message || String(err)), 'danger'); });
@@ -95,7 +95,7 @@ return view.extend({
 				if ((operation.value === 'unblock' ? !/^\d{8}$/.test(firstValue) : !/^\d{4,8}$/.test(firstValue)) || ((operation.value === 'change' || operation.value === 'unblock') && !/^\d{4,8}$/.test(secondValue)))
 					return ui.addNotification(null, E('p', {}, _('PIN must contain 4–8 digits; PUK must contain exactly 8 digits.')), 'warning');
 				ui.hideModal();
-				fs.exec('/usr/sbin/mt5700m-at', [ 'sim-pin', operation.value, firstValue, secondValue ]).then(function() { window.location.reload(); }, function(err) { ui.addNotification(null, E('p', {}, err.message || String(err)), 'danger'); });
+				controls.exec('/usr/sbin/mt5700m-at', [ 'sim-pin', operation.value, firstValue, secondValue ]).then(function() { window.location.reload(); }, function(err) { ui.addNotification(null, E('p', {}, err.message || String(err)), 'danger'); });
 			} }, _('Apply')) ])
 		]);
 	},
@@ -123,8 +123,8 @@ return view.extend({
 					return ui.addNotification(null, E('p', {}, _('Trigger temperatures must rise by level, and each recovery temperature must be lower than its trigger.')), 'warning');
 				ui.hideModal();
 				Promise.all([
-					fs.exec('/usr/sbin/mt5700m-at', [ 'advanced-set', 'thermal-thresholds' ].concat(next)),
-					fs.exec('/usr/sbin/mt5700m-at', [ 'advanced-set', 'thermal-log', serialLog.value, fileLog.value ])
+					controls.exec('/usr/sbin/mt5700m-at', [ 'advanced-set', 'thermal-thresholds' ].concat(next)),
+					controls.exec('/usr/sbin/mt5700m-at', [ 'advanced-set', 'thermal-log', serialLog.value, fileLog.value ])
 				]).then(function() { ui.addNotification(null, E('p', {}, _('Thermal settings saved.'))); window.setTimeout(function() { window.location.reload(); }, 1200); }, function(err) { ui.addNotification(null, E('p', {}, err.message || String(err)), 'danger'); });
 			} }, _('Apply')) ])
 		]);
@@ -152,7 +152,7 @@ return view.extend({
 			controls.row(_('Type RESET to confirm'), confirm),
 			E('div', { 'class':'right' }, [ E('button', { 'class':'btn', 'click':ui.hideModal }, _('Cancel')), ' ', E('button', { 'class':'btn cbi-button-negative', 'click':function() {
 				if (confirm.value !== 'RESET') return ui.addNotification(null, E('p', {}, _('Confirmation text does not match.')), 'warning');
-				ui.hideModal(); fs.exec('/usr/sbin/mt5700m-at', [ 'factory-reset' ]).then(function() { ui.addNotification(null, E('p', {}, _('Factory reset accepted. The module will restart.'))); }, function(err) { ui.addNotification(null, E('p', {}, err.message || String(err)), 'danger'); });
+				ui.hideModal(); controls.exec('/usr/sbin/mt5700m-at', [ 'factory-reset' ]).then(function() { ui.addNotification(null, E('p', {}, _('Factory reset accepted. The module will restart.'))); }, function(err) { ui.addNotification(null, E('p', {}, err.message || String(err)), 'danger'); });
 			} }, _('Restore factory settings')) ])
 		]);
 	},
