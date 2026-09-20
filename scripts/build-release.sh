@@ -53,6 +53,12 @@ find bin -type f \( -name 'luci-app-mt5700m-*.apk' -o -name 'luci-app-mt5700m_*.
 test "$(find "${output_dir}" -type f \( -name '*.apk' -o -name '*.ipk' \) | wc -l)" -ge 3
 if find "${output_dir}" -name '*.apk' | grep -q .; then
   cp public-key.pem "${output_dir}/openwrt-sdk-build.pem"
+  mkdir -p "${work_dir}/verification-keys"
+  cp public-key.pem "${work_dir}/verification-keys/build.pem"
+  for package in "${output_dir}"/*.apk; do
+    staging_dir/host/bin/apk adbsign --sign-key private-key.pem "$package"
+    staging_dir/host/bin/apk --keys-dir "${work_dir}/verification-keys" verify "$package"
+  done
 fi
 printf 'SDK=%s\nSOURCE_COMMIT=%s\nTARGET=mediatek/filogic\n' "$sdk_version" "$(git -C "$repo_dir" rev-parse HEAD)" > "${output_dir}/BUILD-INFO.txt"
 grep "[ *]${archive}$" "${work_dir}/sha256sums" >> "${output_dir}/BUILD-INFO.txt"
