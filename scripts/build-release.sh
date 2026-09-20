@@ -56,7 +56,9 @@ if find "${output_dir}" -name '*.apk' | grep -q .; then
   mkdir -p "${work_dir}/verification-keys"
   cp public-key.pem "${work_dir}/verification-keys/build.pem"
   for package in "${output_dir}"/*.apk; do
-    staging_dir/host/bin/apk adbsign --sign-key private-key.pem "$package"
+    # Input is our just-built unsigned package, not a downloaded dependency.
+    # Only signing accepts unsigned input; the following verification is strict.
+    staging_dir/host/bin/apk adbsign --allow-untrusted --sign-key private-key.pem "$package"
     staging_dir/host/bin/apk --keys-dir "${work_dir}/verification-keys" verify "$package"
   done
 fi
