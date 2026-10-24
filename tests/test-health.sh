@@ -16,21 +16,22 @@ ifup() { [ "$1" = MT5700M ]; echo renew >>"$TMP/actions"; }
 set_ndis_session() { echo "ndis=$1" >>"$TMP/actions"; }
 log_message() { :; }
 sleep() { :; }
-check_data_health; test ! -f "$TMP/actions"
-NOW=160; check_data_health; test "$(cat "$TMP/actions")" = renew
-NOW=220; check_data_health
-NOW=280; check_data_health; test "$(wc -l <"$TMP/actions")" -eq 1
-NOW=340; check_data_health
-test "$(grep -c ndis "$TMP/actions")" -eq 2
-HOST="$MODEM"; NOW=400; check_data_health; test "$(health_get state)" = healthy
-test "$(health_get stage)" = 0
+# NAT addresses differ, but actual traffic works: no repair permitted.
+check_data_health; test ! -f "$TMP/actions"; test "$(health_get state)" = healthy
+MODEM=''; NOW=160; check_data_health; test "$(health_get state)" = healthy
+test ! -f "$TMP/actions"
 PROBE=1
-NOW=460; check_data_health; NOW=520; check_data_health
-test "$(wc -l <"$TMP/actions")" -eq 4
-NOW=580; check_data_health; test "$(wc -l <"$TMP/actions")" -eq 5
-NOW=640; check_data_health; NOW=700; check_data_health; NOW=760; check_data_health
+NOW=220; check_data_health; NOW=280; check_data_health; test ! -f "$TMP/actions"
+NOW=340; check_data_health; test "$(cat "$TMP/actions")" = renew
+NOW=400; check_data_health; NOW=460; check_data_health
+test "$(wc -l <"$TMP/actions")" -eq 1
+NOW=520; check_data_health; test "$(grep -c ndis "$TMP/actions")" -eq 2
+NOW=580; check_data_health; NOW=640; check_data_health; NOW=700; check_data_health
+test "$(wc -l <"$TMP/actions")" -eq 7
+NOW=760; check_data_health; NOW=820; check_data_health; NOW=880; check_data_health
 test "$(health_get state)" = needs-attention
-test "$(wc -l <"$TMP/actions")" -eq 5
-MODEM=''; NOW=820; check_data_health; test "$(health_get state)" = modem-unconfirmed
-MODEM=10.1.1.1; PROBE=2; NOW=880; check_data_health; test "$(health_get state)" = probe-unavailable
-echo 'PASS: address mismatch, false alarm threshold, DHCP-first recovery, cooldown and hourly budget'
+test "$(wc -l <"$TMP/actions")" -eq 7
+PROBE=0; NOW=940; check_data_health; test "$(health_get state)" = healthy
+test "$(health_get stage)" = 0; test "$(health_get attempts)" = 3
+PROBE=2; NOW=1000; check_data_health; test "$(health_get state)" = probe-unavailable
+echo 'PASS: NAT/AT independence, failure threshold, DHCP-first recovery, cooldown and hourly budget'

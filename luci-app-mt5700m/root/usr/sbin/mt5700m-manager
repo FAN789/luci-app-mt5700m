@@ -13,6 +13,7 @@ INTERFACE='MT5700M'
 INTERFACE6='MT5700Mv6'
 . "${MT5700M_LOCK_HELPER:-$(dirname "$0")/../share/mt5700m/lock.sh}"
 . "${MT5700M_HEALTH_HELPER:-$(dirname "$0")/../share/mt5700m/health.sh}"
+. "${MT5700M_SESSION_HELPER:-$(dirname "$0")/../share/mt5700m/session.sh}"
 . "${MT5700M_PROFILE_HELPER:-$(dirname "$0")/../share/mt5700m/profile.sh}"
 
 [ -r "${USB_HELPER}" ] && . "${USB_HELPER}"
@@ -287,49 +288,6 @@ apply_profile() {
 set_ndis_session() {
 	case "$1" in 0|1) ;; *) return 1 ;; esac
 	"${AT_HELPER}" ndis "$1" >/dev/null
-}
-
-recover_ndis_link() {
-	local netdev carrier reason
-
-	[ "$(config_value enabled 1)" = '1' ] || return 0
-	netdev="$(mt5700m_netdev || true)"
-	[ -n "${netdev}" ] || return 1
-	carrier="$(cat "/sys/class/net/${netdev}/carrier" 2>/dev/null || echo 0)"
-	if [ "${carrier}" = '1' ]; then
-		rm -f "${NDIS_RECOVERY_MARKER}" 2>/dev/null || true
-	fi
-	if [ ! -e "${NDIS_SYNC_MARKER}" ]; then
-		reason='host-start'
-	elif [ "${carrier}" != '1' ] && [ ! -e "${NDIS_RECOVERY_MARKER}" ]; then
-		reason='carrier-loss'
-	else
-		return 0
-	fi
-
-	# A sysupgrade reboots the host without rebooting the modem. The modem may
-	# retain an active PDP context while CDC NCM no longer reports carrier or
-	# passes no traffic. Reapply the retained user profile and recreate the data
-	# session once per host start or carrier-loss event.
-	bring_down
-	set_ndis_session 0 || {
-		bring_up
-		return 1
-	}
-	sleep 2
-	apply_profile || {
-		set_ndis_session 1 || true
-		bring_up
-		return 1
-	}
-	set_ndis_session 1 || {
-		bring_up
-		return 1
-	}
-	bring_up
-	mkdir -p "${STATE_DIR}"
-	touch "${NDIS_SYNC_MARKER}" "${NDIS_RECOVERY_MARKER}"
-	log_message "synchronized MT5700M data session reason=${reason} device=${netdev}"
 }
 
 connect_manager() {

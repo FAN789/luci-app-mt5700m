@@ -30,6 +30,8 @@ jobs:
           sh -n luci-app-mt5700m/root/usr/sbin/mt5700m-manager
           sh -n luci-app-mt5700m/root/usr/sbin/mt5700m-traffic
           sh -n luci-app-mt5700m/root/usr/share/mt5700m/usb.sh
+          sh -n luci-app-mt5700m/root/usr/share/mt5700m/session.sh
+          sh -n luci-app-mt5700m/root/usr/share/mt5700m/health.sh
           sh luci-app-mt5700m/tests/test-usb-detection.sh
           sh luci-app-mt5700m/tests/test-temperature-cache.sh
           sh luci-app-mt5700m/tests/test-read-cache.sh
@@ -53,10 +55,13 @@ jobs:
       - name: Check UI failure handling and SMS decoding
         run: |
           node tests/test-ui-errors.js
+          node tests/test-ui-layout.js
           node tests/test-sms-decode.js
           sh tests/test-action-lock.sh
           sh tests/test-sms-jobs.sh
           sh tests/test-health.sh
+          sh tests/test-health-probe.sh
+          sh tests/test-session.sh
           sh tests/test-profile-rollback.sh
           node tests/test-sms-ui.js
       - name: Validate JSON metadata

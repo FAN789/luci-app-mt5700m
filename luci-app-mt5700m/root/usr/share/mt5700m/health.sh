@@ -12,24 +12,32 @@ health_modem_address() {
 }
 health_host_address() { ip -4 -o addr show dev "$1" 2>/dev/null | awk '{split($4,a,"/"); print a[1]}'; }
 health_probe() {
-    local target code
+    local target code deadline remaining limit
     command -v curl >/dev/null 2>&1 || return 2
+    deadline=$(($(health_now)+${2:-4}))
     for target in https://www.baidu.com https://www.qq.com; do
-        code="$(curl --interface "$1" --connect-timeout 2 --max-time 2 -s -o /dev/null -w '%{http_code}' "$target" 2>/dev/null)" || continue
+        remaining=$((deadline-$(health_now)))
+        [ "$remaining" -gt 0 ] || return 1
+        limit=2; [ "$remaining" -ge 2 ] || limit="$remaining"
+        code="$(curl -4 --interface "$1" --connect-timeout "$limit" --max-time "$limit" -s -o /dev/null -w '%{http_code}' "$target" 2>/dev/null)" || continue
         case "$code" in [1-5][0-9][0-9]) return 0;; esac
     done
     return 1
 }
-health_repair() {
+health_claim_repair() {
     local now="$1" attempts last window
     last="$(health_get repair)"
-    [ "$last" = 0 ] || [ $((now-last)) -ge 180 ] || { health_state cooldown; return 0; }
+    [ "$last" = 0 ] || [ $((now-last)) -ge 180 ] || { health_state cooldown; return 1; }
     window="$(health_get window)"
     if [ "$window" = 0 ] || [ $((now-window)) -ge 3600 ]; then health_put window "$now"; health_put attempts 0; fi
     attempts="$(health_get attempts)"
-    [ "$attempts" -lt 3 ] || { health_state needs-attention; return 0; }
+    [ "$attempts" -lt 3 ] || { health_state needs-attention; return 1; }
     # Save attempt before touching the link: a failed command must not loop.
     health_put repair "$now"; health_put attempts $((attempts+1))
+}
+health_repair() {
+    local now="$1"
+    health_claim_repair "$now" || return 0
     health_put failures 0; health_put mismatch 0
     if [ "$(health_get stage)" = 0 ]; then
         health_put stage 1
@@ -51,7 +59,7 @@ health_repair() {
     fi
 }
 check_data_health() {
-    local now last dev modem host failures mismatch probe_rc
+    local now last dev failures probe_rc
     [ "$(config_value enabled 1)" = 1 ] || { health_state disabled; return 0; }
     [ "$(config_value pdp_type ip)" != ipv6 ] || { health_state ipv6-not-probed; return 0; }
     now="$(health_now)"; last="$(health_get checked)"
@@ -59,14 +67,9 @@ check_data_health() {
     health_put checked "$now"
     dev="$(mt5700m_netdev || true)"
     [ -n "$dev" ] && interface_up "${INTERFACE}" || { health_state link-down; return 0; }
-    modem="$(health_modem_address)"; host="$(health_host_address "$dev")"
-    [ -n "$modem" ] || { health_state modem-unconfirmed; health_put mismatch 0; return 0; }
-    if ! printf '%s\n' "$host" | grep -Fxq "$modem"; then
-        mismatch="$(health_get mismatch)"; mismatch=$((mismatch+1)); health_put mismatch "$mismatch"
-        health_state lease-mismatch
-        [ "$mismatch" -lt 2 ] || health_repair "$now"
-        return 0
-    fi
+    # NAT legitimately gives the host and PDP context different addresses.
+    # A successful interface-bound probe is stronger evidence than equality;
+    # an unavailable AT address must not tear down a working connection either.
     health_put mismatch 0
     if health_probe "$dev"; then
         health_state healthy; health_put verified "$now"; health_put failures 0; health_put stage 0

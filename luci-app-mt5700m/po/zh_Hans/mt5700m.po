@@ -2587,3 +2587,9 @@ msgstr "注册成功或接口连接不等于能上网；自动恢复设有冷却
 
 msgid "SMS storage is nearly full. Review and delete only messages you no longer need; existing messages are never deleted automatically."
 msgstr "短信存储空间即将用满。请检查并仅删除不再需要的短信；插件不会自动删除已有短信。"
+
+msgid "Download %s"
+msgstr "下载 %s"
+
+msgid "Upload %s"
+msgstr "上传 %s"

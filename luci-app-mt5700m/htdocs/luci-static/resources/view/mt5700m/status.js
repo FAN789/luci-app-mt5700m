@@ -200,7 +200,7 @@ return view.extend({
 			]);
 		}) : [ E('div', { 'class':'mt5700m-focus-desc' }, _('Statistics appear after the MT5700M data interface has carried traffic for a few minutes.')) ];
 		function stat(label, item) {
-			return E('div', { 'class':'mt5700m-traffic-stat' }, [ E('div', { 'class':'mt5700m-traffic-label' }, label), E('div', { 'class':'mt5700m-traffic-value' }, controls.formatBytes(trafficTotal(item))), E('div', { 'class':'mt5700m-traffic-split' }, _('Download %s · Upload %s').format(controls.formatBytes(item.rx), controls.formatBytes(item.tx))) ]);
+			return E('div', { 'class':'mt5700m-traffic-stat' }, [ E('div', { 'class':'mt5700m-traffic-label' }, label), E('div', { 'class':'mt5700m-traffic-value' }, controls.formatBytes(trafficTotal(item))), E('div', { 'class':'mt5700m-traffic-split' }, [ E('span', {}, _('Download %s').format(controls.formatBytes(item.rx))), E('span', {}, _('Upload %s').format(controls.formatBytes(item.tx))) ]) ]);
 		}
 		return E('section', { 'class':'mt5700m-traffic mt-ui-card' }, [
 			E('div', { 'class':'mt5700m-traffic-head' }, [ E('div', {}, [ E('h3', {}, _('Traffic Statistics')), E('p', {}, _('Local usage recorded only for the MT5700M data interface')) ]), E('div', { 'class':'mt5700m-traffic-side' }, [ E('div', { 'class':'mt5700m-updated' }, _('Last updated') + ' · ' + trafficUpdated(iface)), E('div', { 'class':'mt5700m-legend' }, [ E('span', {}, _('Download')), E('span', {}, _('Upload')) ]) ]) ]),
