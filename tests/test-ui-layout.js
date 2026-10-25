@@ -25,3 +25,7 @@ assert(css.includes('.mt5700m-traffic-value{font-size:22px'));
 assert(!css.includes('@font-face') && !css.includes('@import'));
 assert(css.includes('.mt-signal-countdown{font-size:12px'));
 console.log('PASS: scoped typography hierarchy, tabular numerals, countdown and no remote font requests');
+
+assert(css.includes('height:36px;min-height:36px;margin:0'))
+assert(css.includes('.mt5700m-hero-side{display:flex;flex-direction:row;align-items:center;gap:10px}'));
+console.log('PASS: connection badge and refresh share height and center alignment');
