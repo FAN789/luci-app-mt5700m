@@ -376,22 +376,35 @@ refresh_read_caches() {
 	fi
 }
 
+monitor_sync_if_needed() {
+	local info state netdev configured
+	info="$(mt5700m_usb_info || true)"
+	state="${info%%|*}"
+	netdev="$(mt5700m_netdev || true)"
+	configured="$(uci -q get network.${INTERFACE}.device 2>/dev/null || true)"
+	# start_service/reload_service already performs a full sync. In the monitor,
+	# only resync after actual USB/device replacement or missing configuration.
+	[ "${state}" = normal ] && [ -n "${netdev}" ] && [ "${configured}" = "${netdev}" ] && return 0
+	sync_manager >/dev/null 2>&1 || true
+}
+
 monitor_manager() {
 	while :; do
 		if acquire_lock; then
 			(
 				mt5700m_action_lock || exit $?
 				recover_profile_transaction || exit 1
-				sync_manager >/dev/null 2>&1 || true
+				monitor_sync_if_needed
 				recover_ndis_link >/dev/null 2>&1 || true
 				check_data_health >/dev/null 2>&1 || true
 			)
 			release_lock
 		fi
 		refresh_temperature_cache >/dev/null 2>&1 || true
-		# Prime after boot and keep snapshots warm. The read helper immediately
-		# returns fresh data or launches a single background refresh when stale.
-		refresh_read_caches
+		# Do not prewarm status/advanced caches from the monitor loop. Concurrent
+		# periodic AT reads can stall the MT5700M control channel and were observed
+		# to coincide with deterministic NCM carrier loss. LuCI continues to refresh
+		# these caches on demand through mt5700m-read.
 		sleep 15
 	done
 }

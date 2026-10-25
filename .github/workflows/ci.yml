@@ -64,6 +64,7 @@ jobs:
           node tests/test-ui-layout.js
           node tests/test-signal-ui.js
           sh tests/test-signal-collector.sh
+          sh tests/test-monitor-telemetry.sh
           node tests/test-sms-decode.js
           sh tests/test-action-lock.sh
           sh tests/test-sms-jobs.sh
