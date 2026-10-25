@@ -1197,6 +1197,15 @@ cell_scan_result() {
 
 action="${1:-status}"
 case "${action}" in
+	signal)
+		# Low-priority live telemetry must never queue behind SMS or settings.
+		exec 9>"${MT5700M_ACTION_LOCK:-/var/lock/mt5700m-action.lock}" || exit 1
+		flock -n 9 || exit 75
+		export MT5700M_ACTION_LOCKED=1
+		timeout_s=1
+		print_signal
+		exit $?
+		;;
 	cellscan-status|cellscan-result|preview-lock|sms-send-worker|sms-send-status) ;;
 	*) mt5700m_action_lock || exit $? ;;
 esac
@@ -1251,7 +1260,8 @@ case "${action}" in
 		print_identity
 		print_sim_operator
 		print_subscriber_number
-		print_signal
+		# The background producer owns signal sampling; full status reuses it too.
+		/usr/sbin/mt5700m-read signal 2>/dev/null || true
 		print_subscription_rate
 		print_carrier_aggregation
 		print_temperature

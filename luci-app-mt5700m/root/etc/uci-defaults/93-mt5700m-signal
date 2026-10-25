@@ -1,0 +1,7 @@
+#!/bin/sh
+# Telemetry starts separately; it must never redial or reset the modem.
+if [ -z "${IPKG_INSTROOT:-}" ] && [ -x /etc/init.d/mt5700m-signal ]; then
+ /etc/init.d/mt5700m-signal enable >/dev/null 2>&1 || true
+ (sleep 1; /etc/init.d/mt5700m-signal restart) >/dev/null 2>&1 &
+fi
+exit 0

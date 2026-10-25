@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sdk: ['24.10.8', '25.12.5']
+        sdk: ['24.10.8', '25.12.6']
     steps:
       - uses: actions/checkout@v4
       - name: Validate release version

@@ -1,0 +1,43 @@
+#!/bin/sh
+# One background producer; consumers never open the modem control channel.
+AT_HELPER="${MT5700M_AT_HELPER:-/usr/sbin/mt5700m-at}"
+CACHE_DIR="${MT5700M_READ_CACHE_DIR:-/tmp/mt5700m-read-cache}"
+collect() (
+ local temporary rc
+ umask 077
+ temporary="$(mktemp "${CACHE_DIR}/.signal.XXXXXX")" || exit 1
+ trap 'rm -f "${temporary}"' EXIT
+ trap 'exit 1' HUP INT TERM
+ # The existing signal action uses a nonblocking action lock and bounded AT
+ # transport. Never queue, redial, reset or replay a failed modem command here.
+ "${AT_HELPER}" signal >"${temporary}" 2>/dev/null
+ rc=$?
+ [ "${rc}" -eq 0 ] || exit "${rc}"
+ grep -q '^sysmode=.' "${temporary}" || exit 1
+ printf '\nsampled_at=%s\n' "$(date +%s)" >>"${temporary}"
+ chmod 0600 "${temporary}" || exit 1
+ mv -f "${temporary}" "${CACHE_DIR}/signal.cache"
+)
+case "${1:-run}" in run|once) ;; *) exit 64 ;; esac
+umask 077
+mkdir -p "${CACHE_DIR}" || exit 1
+chmod 0700 "${CACHE_DIR}" || exit 1
+exec 7>"${CACHE_DIR}/collector.flock" || exit 1
+flock -n 7 || exit 75
+[ "${1:-run}" != once ] || { collect; exit $?; }
+trap 'exit 0' HUP INT TERM
+failures=0
+while :; do
+ start="$(cut -d. -f1 /proc/uptime)"
+ collect; rc=$?
+ delay=5
+ case "${rc}" in
+  0) failures=0 ;;
+  75) : ;; # SMS/settings own the modem: skip this sample without waiting.
+  *) failures=$((failures + 1)); delay=$((failures * 5 + 5)); [ "${delay}" -le 30 ] || delay=30 ;;
+ esac
+ finish="$(cut -d. -f1 /proc/uptime)"
+ wait_s=$((delay - finish + start))
+ [ "${wait_s}" -gt 0 ] || wait_s=5
+ sleep "${wait_s}"
+done

@@ -94,9 +94,27 @@ cached_read() {
 	cat "${cache_file}"
 }
 
+
+# Signal requests are cache-only: only the procd collector may query the modem.
+# Read one atomic snapshot and judge its actual sample time, never request time.
+signal_read() {
+ local snapshot stamp now
+ snapshot="$(cat "${CACHE_DIR}/signal.cache" 2>/dev/null)" || return 75
+ stamp="$(printf '%s\n' "${snapshot}" | sed -n 's/^sampled_at=//p')"
+ case "${stamp}" in ''|*[!0-9]*) return 75 ;; esac
+ now="$(date +%s)"
+ [ "${stamp}" -le "${now}" ] && [ "$((now - stamp))" -le 30 ] || return 75
+ printf '%s\n' "${snapshot}" | grep -q '^sysmode=' || return 75
+ printf '%s\n' "${snapshot}"
+}
+
 case "${1:-}" in
 	status)
 		cached_read status "$@"
+		exit $?
+		;;
+	signal)
+		signal_read "$@"
 		exit $?
 		;;
 	temperature|network|cellscan-status|cellscan-result|sms-list|sms-info|sms-send-status|system|fota-state|fota-progress)

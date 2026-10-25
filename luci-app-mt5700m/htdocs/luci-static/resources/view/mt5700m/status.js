@@ -51,6 +51,17 @@ return view.extend({
 		});
 	},
 
+	startSignalUpdates: function(root, temperature) {var self=this;var delayed=false;var mounted=false;var started=Date.now(),lastSuccess=0;function updateAge(card){var age=Math.max(0,Math.floor((Date.now()-(lastSuccess||started))/1000));var label=card&&card.querySelector('[data-signal-time]');if(!label||!delayed)return;var previous=lastSuccess?'上次成功 '+new Date(lastSuccess).toLocaleTimeString():'尚未取得动态信号';label.textContent=(age>10?'信号更新延迟，数值可能已过期':'等待更新（模组忙或查询暂未完成）')+' · '+previous;}
+function badge(text){root.querySelectorAll('[data-signal-countdown]').forEach(function(node){node.textContent=text;});}
+function schedule(){var remaining=5;function tick(){if(!root.isConnected){if(!mounted)window.setTimeout(tick,100);return;}
+mounted=true;if(document.hidden){badge('已暂停');window.setTimeout(tick,1000);return;}
+updateAge(root.querySelector('[data-mt-signal]'));if(remaining===0)return update();badge((delayed?'重试 ':'刷新 ')+remaining+'s');remaining--;window.setTimeout(tick,1000);}
+tick();}
+function update(){if(!root.isConnected)return;if(document.hidden){schedule();return;}
+var card=root.querySelector('[data-mt-signal]');if(!card){schedule();return;}
+badge('刷新中');return controls.exec('/usr/sbin/mt5700m-read',['signal']).then(function(result){var data={};(result.stdout||'').trim().split('\n').forEach(function(line){var pos=line.indexOf('=');if(pos>0)data[line.slice(0,pos)]=line.slice(pos+1);});var sampled=Number(data.sampled_at)*1000,age=(Date.now()-sampled)/1000;if(!data.sysmode||!Number.isFinite(sampled)||sampled<=0||age<0||age>30)throw new Error('Signal unavailable');if(!root.isConnected||document.hidden)return;delayed=age>15;lastSuccess=sampled;data.temperature=temperature;data.signalUpdated=(delayed?'信号更新延迟 · ':'信号更新：')+new Date(lastSuccess).toLocaleTimeString();card.replaceWith(self.signalCard(data));}).catch(function(){if(!root.isConnected)return;delayed=true;updateAge(card);}).then(function(){if(root.isConnected)schedule();});}
+window.setTimeout(update,0);},
+
 	parseStatus: function(res) {
 		var data = {};
 		(res.native && res.native.stdout || '').trim().split(/\n/).forEach(function(line) {
@@ -135,10 +146,10 @@ return view.extend({
 		var bars = [], i;
 		for (i = 0; i < 14; i++)
 			bars.push(E('span', { 'class':'mt5700m-signal-bar' + (i < active ? ' on' : ''), 'style':'height:%dpx'.format(8 + i * 3) }));
-		return E('section', { 'class':'mt5700m-focus mt-ui-card' }, [
+		return E('section', { 'class':'mt5700m-focus mt-ui-card', 'data-mt-signal':'' }, [
 			E('div', { 'class':'mt5700m-focus-head' }, [
-				E('div', {}, [ E('div', { 'class':'mt5700m-focus-title' }, _('Signal')), E('div', { 'class':'mt5700m-focus-desc' }, _('Current radio quality at a glance')) ]),
-				E('span', { 'class':'mt5700m-badge ' + quality.cls }, quality.label)
+				E('div', {}, [ E('div', { 'class':'mt5700m-focus-title' }, _('Signal')), E('div', { 'class':'mt5700m-focus-desc', 'data-signal-time':'' }, data.signalUpdated || '') ]),
+				E('div', { 'class':'mt-signal-actions' }, [ E('span', { 'class':'mt-signal-countdown', 'data-signal-countdown':'' }), E('span', { 'class':'mt5700m-badge ' + quality.cls }, quality.label) ])
 			]),
 			E('div', { 'class':'mt5700m-signal-value' }, [ E('strong', {}, isNaN(rsrp) ? '--' : String(data.rsrp)), E('span', {}, 'RSRP · dBm') ]),
 			E('div', { 'class':'mt5700m-signal-bars ' + quality.cls, 'aria-hidden':'true' }, bars),
@@ -219,7 +230,7 @@ return view.extend({
 		if (!/[A-Za-z0-9\u4e00-\u9fff]/.test(operator)) operator = '';
 		var usbNames = { upgrade:_('Upgrade mode'), dump:_('Dump mode'), unknown:_('Unknown USB mode') };
 		var abnormalUsb = data.usb_state === 'upgrade' || data.usb_state === 'dump' || data.usb_state === 'unknown';
-		return E('div', { 'class':'mt5700m-page mt-ui-page' }, [
+		var root = E('div', { 'class':'mt5700m-page mt-ui-page' }, [
 			this.styleNode(), controls.styleNode(), controls.healthNode(res.manager),
 			data.error ? E('div', { 'class':'alert-message warning mt5700m-alert' }, data.error) : null,
 			res.session && res.session.stderr ? E('div', { 'class':'alert-message warning mt5700m-alert' }, res.session.stderr) : null,
@@ -240,6 +251,8 @@ return view.extend({
 				this.shortcut(_('Module and SIM'), _('Module identity, SIM information and maintenance'), 'admin/modem/mt5700m/system')
 			])
 		].filter(Boolean));
+		this.startSignalUpdates(root, data.temperature);
+		return root;
 	},
 
 	handleSave: null,

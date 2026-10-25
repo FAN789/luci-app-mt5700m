@@ -18,6 +18,9 @@ jobs:
       - name: Check shell syntax and USB detection
         run: |
           sh -n luci-app-mt5700m/root/etc/hotplug.d/usb/60-mt5700m
+          sh -n luci-app-mt5700m/root/usr/sbin/mt5700m-signal
+          sh -n luci-app-mt5700m/root/etc/init.d/mt5700m-signal
+          sh -n luci-app-mt5700m/root/etc/uci-defaults/93-mt5700m-signal
           sh -n luci-app-mt5700m/root/etc/init.d/mt5700m-manager
           sh -n luci-app-mt5700m/root/etc/init.d/mt5700m-traffic
           sh -n luci-app-mt5700m/root/etc/hotplug.d/net/95-mt5700m-traffic
@@ -44,6 +47,9 @@ jobs:
           TRANSPORT_BIN=/tmp/mt5700m-transport-test python3 mt5700m-transport/tests/test_transport.py -v
       - name: Check executable service files
         run: |
+          test -x luci-app-mt5700m/root/usr/sbin/mt5700m-signal
+          test -x luci-app-mt5700m/root/etc/init.d/mt5700m-signal
+          test -x luci-app-mt5700m/root/etc/uci-defaults/93-mt5700m-signal
           test -x luci-app-mt5700m/root/usr/sbin/mt5700m-read
           test -x luci-app-mt5700m/root/usr/sbin/mt5700m-traffic
           test -x luci-app-mt5700m/root/usr/libexec/rpcd/mt5700m-traffic
@@ -56,6 +62,8 @@ jobs:
         run: |
           node tests/test-ui-errors.js
           node tests/test-ui-layout.js
+          node tests/test-signal-ui.js
+          sh tests/test-signal-collector.sh
           node tests/test-sms-decode.js
           sh tests/test-action-lock.sh
           sh tests/test-sms-jobs.sh

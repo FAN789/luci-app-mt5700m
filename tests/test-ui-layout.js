@@ -18,3 +18,10 @@ assert(status.includes("_('Download %s')") && status.includes("_('Upload %s')"))
 const po = fs.readFileSync(path.join(root, 'po/zh_Hans/mt5700m.po'), 'utf8');
 for (const msg of ['Download %s', 'Upload %s']) assert(po.includes(`msgid "${msg}"`));
 console.log('PASS: scoped theme resets, responsive layout, checkbox and translated traffic lines');
+
+assert(css.includes('font-variant-numeric:tabular-nums'));
+assert(css.includes('.mt5700m-signal-value strong{font-size:32px'));
+assert(css.includes('.mt5700m-traffic-value{font-size:22px'));
+assert(!css.includes('@font-face') && !css.includes('@import'));
+assert(css.includes('.mt-signal-countdown{font-size:12px'));
+console.log('PASS: scoped typography hierarchy, tabular numerals, countdown and no remote font requests');

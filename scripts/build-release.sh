@@ -4,7 +4,7 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work_dir="${RUNNER_TEMP:-/tmp}/mt5700m-sdk"
 output_dir="${repo_dir}/dist-release"
-sdk_version="${SDK_VERSION:-25.12.5}"
+sdk_version="${SDK_VERSION:-25.12.6}"
 base_url="https://downloads.openwrt.org/releases/${sdk_version}/targets/mediatek/filogic"
 
 mkdir -p "${work_dir}" "${output_dir}"
