@@ -198,10 +198,11 @@ function healthNode(manager) {
 	var state = manager.health_status || 'unknown';
 	var good = manager.internet_verified === true;
 	return E('div', { 'class': 'alert-message ' + (good ? 'notice' : 'warning') }, [
-		E('strong', {}, good ? _('Cellular Internet verified') : _('Cellular Internet not yet verified')),
+		E('strong', {}, good ? _('Cellular Internet verified') : _('Cellular Internet not yet verified'))
+	].concat(good ? [] : [
 		' — ', E('span', {}, state),
-		good ? '' : ' — ' + _('Link registration alone does not prove Internet access. Recovery is rate-limited.')
-	]);
+		' — ' + _('Link registration alone does not prove Internet access. Recovery is rate-limited.')
+	]));
 }
 
 function action(label, handler) {
