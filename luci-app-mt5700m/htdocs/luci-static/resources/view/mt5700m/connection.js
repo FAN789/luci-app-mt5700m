@@ -199,6 +199,12 @@ return view.extend({
 		]);
 	},
 
+	profileSummary: function(raw, saved) {
+		var match = controls.section(raw || '', 'Auto dial').match(/^\^SETAUTODIAL:\s*([01]),([12]),"(IP|IPV6|IPV4V6)","([^",\r\n]*)","([^",\r\n]*)","([^",\r\n]*)",([0-3])\s*$/m);
+		var actual = match ? { IP:'ip', IPV6:'ipv6', IPV4V6:'ipv4v6' }[match[3]] : null;
+		return { actual:actual, mismatch:actual !== null && actual !== saved };
+	},
+
 	render: function(results) {
 		var manager = this.manager || results[0] || {};
 		var self = this;
@@ -211,7 +217,12 @@ return view.extend({
 		var moduleRaw = moduleSettings.stdout || '';
 		var online = dial.connected === true && device.up === true && device.carrier !== false;
 		var configuredApn = uci.get('mt5700m', 'connection', 'apn') || _('Automatic');
-		var configuredProtocol = { ip:'IPv4', ipv6:'IPv6', ipv4v6:'IPv4 / IPv6' }[uci.get('mt5700m', 'connection', 'pdp_type')] || 'IPv4 / IPv6';
+		var protocolNames = { ip:'IPv4', ipv6:'IPv6', ipv4v6:'IPv4 / IPv6' };
+		var savedProtocol = uci.get('mt5700m', 'connection', 'pdp_type') || 'ipv4v6';
+		var configuredProtocol = protocolNames[savedProtocol] || _('Unavailable');
+		var profile = self.profileSummary(moduleRaw, savedProtocol);
+		var actualProtocol = protocolNames[profile.actual] || _('Unavailable');
+		var applyWarning = _('Connect and Redial apply the saved dialing profile to the module. Automatic recovery never rewrites the module dialing profile.');
 		var m = new form.Map('mt5700m');
 		var s, o;
 		var logOutput = E('pre', { 'class':'mt-ui-details-body' }, _('Expand to load the dialing log.'));
@@ -359,18 +370,25 @@ return view.extend({
 					self.fact(_('Automatic dialing'), uci.get('mt5700m', 'connection', 'enabled') === '0' ? _('Disabled') : _('Enabled')),
 					self.fact(_('Network interface'), manager.network),
 					self.fact('APN', configuredApn),
-					self.fact(_('IP protocol'), configuredProtocol)
+					self.fact(_('Saved IP protocol'), configuredProtocol)
 				]),
+				E('div', { 'class':'mtconn-profile-state mt-ui-card', 'style':'padding:14px 16px;margin-bottom:16px' }, [
+					self.sessionRow(_('Module IP protocol (snapshot)'), actualProtocol),
+					E('p', {}, _('The module value is a cached AT readback, not the saved configuration. Refresh this page to read the latest available snapshot.')),
+					profile.mismatch ? E('div', { 'class':'alert-message warning' }, _('The saved and module IP protocols differ. Change the saved protocol to match the module, or explicitly connect/redial to apply the saved profile.')) : null,
+					!profile.actual ? E('div', { 'class':'alert-message notice' }, _('The module protocol is unavailable; the saved value is not proof of the active protocol.')) : null,
+					E('p', {}, applyWarning)
+				].filter(Boolean)),
 				self.sessionPanel(session, sessionResult.stderr),
 				E('div', { 'class': 'mtconn-actions' }, online ? [
-					E('button', { 'class': 'btn cbi-button-action', 'click': function() { return self.runAction(callRedial, _('Redial started.'), _('The 5G connection will be interrupted briefly while the modem redials.')); } }, _('Redial')),
+					E('button', { 'class': 'btn cbi-button-action', 'click': function() { return self.runAction(callRedial, _('Redial started.'), _('The 5G connection will be interrupted briefly while the modem redials.') + ' ' + applyWarning); } }, _('Redial')),
 					E('button', { 'class': 'btn cbi-button-negative', 'click': function() { return self.runAction(callHang, _('Connection stopped.'), _('Disconnect the mobile data connection now?')); } }, _('Disconnect'))
 				] : [
-					E('button', { 'class': 'btn cbi-button-action', 'click': function() { return self.runAction(callDial, _('Dialing started.')); } }, _('Connect'))
+					E('button', { 'class': 'btn cbi-button-action', 'click': function() { return self.runAction(callDial, _('Dialing started.'), applyWarning); } }, _('Connect'))
 				]),
 				E('section', { 'class':'mtconn-config mt-ui-card' }, [
 					E('div', { 'class':'mtconn-config-head' }, [
-						E('h3', {}, _('Connection settings')),
+						E('h3', {}, _('Saved connection settings')),
 						E('p', {}, _('APN is normally detected automatically. Save changes, then redial to use the new settings.'))
 					]),
 					formNode

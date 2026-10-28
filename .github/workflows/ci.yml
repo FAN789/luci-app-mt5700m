@@ -35,6 +35,7 @@ jobs:
           sh -n luci-app-mt5700m/root/usr/share/mt5700m/usb.sh
           sh -n luci-app-mt5700m/root/usr/share/mt5700m/session.sh
           sh -n luci-app-mt5700m/root/usr/share/mt5700m/health.sh
+          sh -n luci-app-mt5700m/root/usr/share/mt5700m/profile.sh
           sh luci-app-mt5700m/tests/test-usb-detection.sh
           sh luci-app-mt5700m/tests/test-temperature-cache.sh
           sh luci-app-mt5700m/tests/test-read-cache.sh
@@ -62,6 +63,8 @@ jobs:
         run: |
           node tests/test-ui-errors.js
           node tests/test-ui-layout.js
+          node tests/test-profile-ui.js
+          sh tests/test-profile-drift.sh
           node tests/test-signal-ui.js
           sh tests/test-signal-collector.sh
           sh tests/test-monitor-telemetry.sh

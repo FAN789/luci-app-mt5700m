@@ -268,7 +268,7 @@ sync_manager() {
 	fi
 }
 
-apply_profile() {
+saved_profile() {
 	local pdp protocol apn username password auth auth_code
 	pdp="$(config_value pdp_type ipv4v6)"
 	case "${pdp}" in ip) protocol='IP' ;; ipv6) protocol='IPV6' ;; *) protocol='IPV4V6' ;; esac
@@ -277,9 +277,13 @@ apply_profile() {
 	password="$(config_value password '')"
 	auth="$(config_value auth none)"
 	case "${auth}" in pap) auth_code=1 ;; chap) auth_code=2 ;; auto) auth_code=3 ;; *) auth_code=0 ;; esac
-	# The MT5700M manual requires the previous auto-dial profile to be
-	# cancelled before a replacement is accepted.
-	apply_profile_transaction "1,1,\"${protocol}\",\"${apn}\",\"${username}\",\"${password}\",${auth_code}" || {
+	printf '%s\n' "1,1,\"${protocol}\",\"${apn}\",\"${username}\",\"${password}\",${auth_code}"
+}
+
+apply_profile() {
+	# Explicit user action: the transaction snapshots, cancels, replaces and
+	# verifies the modem profile, rolling back on failure.
+	apply_profile_transaction "$(saved_profile)" || {
 		[ -f "$PROFILE_JOURNAL" ] || sync_manager
 		return 1
 	}

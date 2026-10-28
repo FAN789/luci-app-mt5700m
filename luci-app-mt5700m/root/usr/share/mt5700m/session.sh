@@ -38,6 +38,14 @@ recover_ndis_link() {
     now="$(health_now)"
     # Shared with health_repair: 180s minimum interval, at most 3/hour total.
     health_claim_repair "$now" || return 0
+    # Do not silently overwrite manual AT changes or interrupt a profile that
+    # cannot be read. Explicit Connect/Redial remains the saved-profile apply.
+    if profile_matches_saved; then rc=0; else rc=$?; fi
+    if [ "$rc" != 0 ]; then
+        case "$rc" in 1) health_state profile-mismatch;; *) health_state profile-unconfirmed;; esac
+        log_message "NDIS recovery: saved/module profile not confirmed rc=$rc; no modem settings written"
+        return 1
+    fi
     reason=carrier-loss
     [ -e "$NDIS_SYNC_MARKER" ] || reason=host-start
     log_message "NDIS recovery: begin reason=$reason"
@@ -47,9 +55,6 @@ recover_ndis_link() {
     log_message "NDIS recovery: step=stop rc=$rc"
     [ "$rc" = 0 ] || { bring_up; return 1; }
     sleep 2
-    if apply_profile; then rc=0; else rc=$?; fi
-    log_message "NDIS recovery: step=profile rc=$rc"
-    [ "$rc" = 0 ] || { bring_up; return 1; }
     if set_ndis_session 1; then rc=0; else rc=$?; fi
     log_message "NDIS recovery: step=start rc=$rc"
     bring_up

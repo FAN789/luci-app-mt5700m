@@ -20,7 +20,9 @@ bring_down() { echo down >> "$TMP/actions"; }
 bring_up() { echo up >> "$TMP/actions"; printf 1 > "$MT5700M_NET_SYSFS/eth2/carrier"; }
 ifup() { echo renew >> "$TMP/actions"; }
 set_ndis_session() { echo "ndis=$1" >> "$TMP/actions"; [ "$1" = 0 ] || return "$START_RC"; }
-apply_profile() { echo profile >> "$TMP/actions"; }
+apply_profile() { echo 'ERROR: automatic profile write' >> "$TMP/actions"; return 1; }
+PROFILE_RC=0
+profile_matches_saved() { return "$PROFILE_RC"; }
 log_message() { printf '%s\n' "$*" >> "$TMP/log"; }
 sleep() { advance "$1"; }
 
@@ -50,4 +52,14 @@ printf 0 > "$MT5700M_NET_SYSFS/eth2/carrier"; advance 180
 lines=$(wc -l < "$TMP/actions"); recover_ndis_link
 test "$(health_get state)" = needs-attention
 test "$(wc -l < "$TMP/actions")" -eq "$lines"
-echo 'PASS: live-link preservation, confirmed/failed timeout, bounded wait and shared recovery budget'
+# A drifted or unreadable modem profile must not trigger any link or AT writes.
+advance 3600; PROFILE_RC=1; lines=$(wc -l < "$TMP/actions")
+recover_ndis_link && exit 1
+test "$(health_get state)" = profile-mismatch
+test "$(wc -l < "$TMP/actions")" -eq "$lines"
+advance 180; PROFILE_RC=2
+recover_ndis_link && exit 1
+test "$(health_get state)" = profile-unconfirmed
+test "$(wc -l < "$TMP/actions")" -eq "$lines"
+! grep -q 'ERROR: automatic profile write' "$TMP/actions"
+echo 'PASS: profile drift/unavailable preservation, live-link preservation, confirmed/failed timeout, bounded wait and shared recovery budget'

@@ -35,6 +35,18 @@ recover_profile_transaction() {
     rm -f "$PROFILE_JOURNAL"
     log_message 'previous modem profile restored and verified'
 }
+# Automatic recovery observes the profile but must never reapply saved settings.
+# Call under the existing action lock and recovery budget; no parameters logged.
+profile_matches_saved() {
+    local current desired raw
+    desired="$(saved_profile)"
+    profile_valid "$desired" || return 2
+    raw="$("${AT_HELPER}" command 'AT^SETAUTODIAL?' 2>/dev/null)" || return 2
+    current="$(printf '%s\n' "$raw" | sed -n 's/^\^SETAUTODIAL: *//p' | tr -d '\r')"
+    profile_valid "$current" || return 2
+    [ "$current" = "$desired" ]
+}
+
 apply_profile_transaction() (
     local desired="$1" old current
     recover_profile_transaction || return 1

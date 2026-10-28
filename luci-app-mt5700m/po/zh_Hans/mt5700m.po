@@ -2593,3 +2593,24 @@ msgstr "下载 %s"
 
 msgid "Upload %s"
 msgstr "上传 %s"
+
+msgid "Saved IP protocol"
+msgstr "已保存的 IP 协议"
+
+msgid "Module IP protocol (snapshot)"
+msgstr "模组 IP 协议（快照）"
+
+msgid "The module value is a cached AT readback, not the saved configuration. Refresh this page to read the latest available snapshot."
+msgstr "模组值来自 AT 回读缓存，与保存配置分别显示。刷新本页可读取最新可用快照。"
+
+msgid "The saved and module IP protocols differ. Change the saved protocol to match the module, or explicitly connect/redial to apply the saved profile."
+msgstr "保存协议与模组协议不一致。可修改保存协议与模组保持一致，或主动连接／重拨，将保存配置应用到模组。"
+
+msgid "The module protocol is unavailable; the saved value is not proof of the active protocol."
+msgstr "暂时无法确认模组协议；保存值不代表当前实际协议。"
+
+msgid "Connect and Redial apply the saved dialing profile to the module. Automatic recovery never rewrites the module dialing profile."
+msgstr "连接和重拨会将保存的拨号配置应用到模组；自动恢复不会重写模组拨号配置。"
+
+msgid "Saved connection settings"
+msgstr "已保存的连接设置"
