@@ -26,6 +26,7 @@ jobs:
         run: |
           version="$(sed -n 's/^PKG_VERSION:=//p' luci-app-mt5700m/Makefile)"
           test "${GITHUB_REF_NAME}" = "v${version}"
+          test -s "release-notes/${GITHUB_REF_NAME}.md"
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -60,8 +61,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          notes="release-notes/${GITHUB_REF_NAME}.md"
+          test -s "$notes"
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" release-assets/*
+            gh release edit "${GITHUB_REF_NAME}" --notes-file "$notes"
           else
-            gh release create "${GITHUB_REF_NAME}" release-assets/* --title "MT5700M Manager ${GITHUB_REF_NAME}" --generate-notes
+            gh release create "${GITHUB_REF_NAME}" release-assets/* --title "MT5700M Manager ${GITHUB_REF_NAME}" --notes-file "$notes"
           fi
