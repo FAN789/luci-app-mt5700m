@@ -1,0 +1,61 @@
+/* Shared typography and responsive layout; no global LuCI theme overrides. */
+.mt-ui-page { --mt-ui-muted:var(--text-color-medium,#69717d); font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; line-height:1.6; font-weight:400; letter-spacing:normal; overflow-wrap:anywhere; box-sizing:border-box; width:100%; }
+.mt-ui-page :is(h2,h3,strong) {font-weight:600}
+.mt-ui-page :is(.mt5700m-title,.mt-ui-hero h2) {font-size:24px;line-height:1.35}
+.mt-ui-page :is(.mt5700m-focus-title,.mt-control-card h3,.mt5700m-traffic-head h3) {font-size:16px}
+.mt-ui-page :is(.mt-control-row label,.mtconn-label,.mt-net-label,.mt-control-desc,.mt-control-state,.mtconn-session-row,.mt-system-row,.mt-net-row) {font-size:13px;line-height:1.6}
+.mt-ui-page :is(.mt5700m-hero-meta,.mt5700m-mini span,.mt5700m-ip-head,.mt5700m-ip-meta,.mt5700m-updated,.mt5700m-legend,.mt5700m-traffic-label,.mt5700m-traffic-split,.mt5700m-day,.mt5700m-shortcut span,.mt-ui-summary-desc,.mt-sms-contact-date,.mt-sms-bubbledate,.mt-sms-storage,.mt-control-note,.mt5700m-badge,.mt5700m-band) {font-size:12px;line-height:1.6}
+.mt-ui-page :is(input,select,textarea,button,.btn) {font-family:inherit;font-size:14px;line-height:1.5}
+.mt-ui-page .btn {display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:6px 12px;box-sizing:border-box}
+.mt-ui-page .mtconn-actions {margin-top:12px}
+.mt-ui-page .mt-lazy>summary::after {content:'›';text-align:center;font-size:22px;transition:transform .16s}
+.mt-ui-page .mt-lazy[open]>summary::after {transform:rotate(90deg)}
+.mt-ui-page :is(.mt5700m-mini strong,.mt5700m-ip-value,.mt5700m-values,.mt-control-state strong) {font-size:14px;font-weight:500;font-variant-numeric:tabular-nums}
+.mt-ui-page :is(pre,code,.mt5700m-ip-value) {font-family:ui-monospace,Consolas,monospace}
+.mt-ui-page .mt5700m-signal-value strong {font-size:32px;font-weight:600;font-variant-numeric:tabular-nums}
+.mt-ui-page .mt5700m-traffic-value {font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.mt-ui-page .mt5700m-hero-side {display:flex;flex-direction:row;align-items:center;gap:10px}
+.mt-ui-page .mt5700m-hero-side :is(.mt5700m-status,.mt5700m-refresh) {display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:38px;min-height:38px;margin:0;padding:0 14px;font-size:13px;line-height:1;white-space:nowrap}
+.mt-ui-page .mt5700m-focus-grid {grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.mt-ui-page .mt5700m-focus {min-width:0}
+.mt-ui-page .mt5700m-traffic-split>span {display:block}
+.mt-ui-page .mt5700m-shortcut>div {min-width:0}
+.mt-ui-page .mt5700m-shortcut span {white-space:normal}
+.mt-ui-page .mt-signal-countdown {font-size:12px;line-height:1.5;color:var(--mt-ui-muted);font-variant-numeric:tabular-nums;background:none;padding:0;white-space:nowrap}
+.mt-ui-page .mt-signal-metahead {display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mt-ui-page [data-signal-time] {font-size:12px;color:var(--mt-ui-muted);min-height:1.5em}
+.mt-ui-page .mt-health-ok {font-size:12px;color:var(--text-color-medium,#61716c);padding:3px 0 8px}
+.mt-ui-page .mt-health-ok::before {content:'●';color:#16a085;margin-right:7px}
+.mt-ui-page .mt-read-error {color:var(--text-color-high,#795300);background:var(--background-color-low,#fff7e5);padding:10px 12px;border-left:3px solid #d59a36;border-radius:6px;font-size:13px}
+.mt-ui-page .mt-lazy-body {padding:16px}
+.mt-ui-page .mt-ui-details>summary {font-size:14px;font-weight:600}
+.mt-ui-page .mt-async-shell,.mt-loading {padding:16px}
+.mt-ui-page .mt-carrier-detail {font-size:12px;color:var(--mt-ui-muted);margin:4px 0 12px}
+.mt-ui-page .mt-data-age {font-size:12px;color:inherit;opacity:.85}
+.mt-ui-page .mt-net-metrics {position:relative}
+.mt-ui-page .mt-net-metrics [data-net-signal-time] {grid-column:1/-1;font-size:12px;color:var(--mt-ui-muted)}
+.mt-ui-page .mt-sms-thread {background:var(--background-color-low,#f7f9fb)}
+.mt-ui-page .mt-sms-bubble {background:var(--background-color-high,#fff);border-color:var(--border-color-medium,#d9dde4);color:var(--text-color-high,#20242a)}
+.mt-ui-page .mt-sms-bubblewrap.out .mt-sms-bubble {background:var(--background-color-high,#edf6ff);border-color:#438fc9}
+.mt-ui-page .mt-sms-contact:hover,.mt-ui-page .mt-sms-contact.active {background:var(--background-color-high,#edf6ff);box-shadow:inset 3px 0 #268bd2}
+.mt-ui-page .mt-sms-delete {min-width:36px;min-height:36px}
+.mt-ui-page .mt-sms-compose textarea {min-width:0}
+.mt-ui-page .mt-sms-status {margin-bottom:12px}
+.mt-ui-page .mt-sms-storage {color:inherit}
+.mt-ui-page .mt-sms-hero-actions {flex-wrap:wrap}
+.mt-ui-page .mt-sms-hero .btn {min-height:38px}
+@media(max-width:1000px){.mt-ui-page .mt5700m-focus-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){
+ #view:has(.mt-ui-page) .cbi-page-actions .cbi-button{min-height:44px;box-sizing:border-box}
+ .mt-ui-page .btn,.mt-ui-page button,.mt-ui-page input:not([type=checkbox]):not([type=radio]),.mt-ui-page select{min-height:44px}
+ .mt-ui-page .mtconn-facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .mt-ui-page .mtconn-fact{min-width:0;padding:12px}
+ .mt-ui-page .mt5700m-shortcuts{grid-template-columns:1fr}
+ .mt-ui-page .mt5700m-hero-side :is(.mt5700m-status,.mt5700m-refresh){min-height:44px;height:44px}
+ .mt-ui-page .mt5700m-traffic-layout{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+ .mt-ui-page .mt5700m-traffic-stat{padding:10px 8px}
+ .mt-ui-page .mt5700m-traffic-value{font-size:18px}
+ .mt-ui-page .mt5700m-days{grid-column:1/-1}
+ .mt-ui-page .mt-sms-settings-row{grid-template-columns:1fr;gap:4px}
+}
+@media(max-width:650px){.mt-ui-page .mt5700m-focus-grid{grid-template-columns:1fr}.mt-ui-page .mt-net-metrics{gap:7px}.mt-ui-page .mt-net-metric{padding:10px}.mt-ui-page .mt-lazy-body{padding:12px}}

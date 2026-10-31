@@ -47,6 +47,7 @@ refresh_cache() (
 	timestamp_file="${temporary}.time"
 	if "${AT_HELPER}" "$@" >"${temporary}" 2>"${error_file}"; then
 		date +%s >"${timestamp_file}"
+		printf '\nsnapshot_at=%s\n' "$(cat "${timestamp_file}")" >>"${temporary}"
 		chmod 0600 "${temporary}" "${timestamp_file}" 2>/dev/null || true
 		mv -f "${temporary}" "${cache_file}"
 		mv -f "${timestamp_file}" "${time_file}"

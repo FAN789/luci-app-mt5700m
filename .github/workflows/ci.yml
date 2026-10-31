@@ -66,6 +66,7 @@ jobs:
           node tests/test-profile-ui.js
           sh tests/test-profile-drift.sh
           node tests/test-signal-ui.js
+          node tests/test-ux.js
           sh tests/test-signal-collector.sh
           sh tests/test-monitor-telemetry.sh
           node tests/test-sms-decode.js
