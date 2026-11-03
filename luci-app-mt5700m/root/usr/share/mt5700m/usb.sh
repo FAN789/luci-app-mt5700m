@@ -6,6 +6,14 @@ MT5700M_USB_VENDOR='3466'
 MT5700M_SYSFS_ROOT="${MT5700M_SYSFS_ROOT:-/sys}"
 MT5700M_DEV_ROOT="${MT5700M_DEV_ROOT:-/dev}"
 
+# Read the negotiated speed of the selected device, not its root hub.
+mt5700m_usb_speed() {
+	local slot="$1" speed
+	case "${slot}" in ''|*[!0-9.-]*|.*) return 1 ;; esac
+	read -r speed < "${MT5700M_SYSFS_ROOT}/bus/usb/devices/${slot}/speed" 2>/dev/null || return 1
+	printf '%s\n' "${speed}" | grep -Ex '[1-9][0-9]*(\.[0-9]+)?'
+}
+
 mt5700m_usb_info() {
 	local device vendor product slot state first=''
 

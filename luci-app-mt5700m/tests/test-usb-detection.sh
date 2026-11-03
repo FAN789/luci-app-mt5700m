@@ -42,6 +42,15 @@ export MT5700M_SYSFS_ROOT MT5700M_DEV_ROOT
 . "${helper}"
 
 [ "$(mt5700m_usb_info)" = 'normal|3301|1-1' ] || fail 'normal PID was not recognized'
+device_speed="${fixture}/sys/devices/platform/usb/1-1/speed"
+for speed in 480 5000 1.5; do
+	printf '%s\n' "${speed}" > "${device_speed}"
+	[ "$(mt5700m_usb_speed 1-1)" = "${speed}" ] || fail 'speed must follow the device attribute'
+done
+printf 'unknown\n' > "${device_speed}"
+mt5700m_usb_speed 1-1 && fail 'malformed speed was accepted'
+rm "${device_speed}"
+mt5700m_usb_speed 1-1 2>/dev/null && fail 'missing speed was accepted'
 [ "$(mt5700m_netdev)" = 'wwan-test' ] || fail 'MT5700M network interface was not discovered'
 [ "$(mt5700m_pcui_port)" = "${fixture}/dev/ttyUSB7" ] || fail 'PCUI descriptor was not selected'
 mt5700m_port_is_pcui "${fixture}/dev/ttyUSB6" && fail 'application interface was accepted as PCUI'

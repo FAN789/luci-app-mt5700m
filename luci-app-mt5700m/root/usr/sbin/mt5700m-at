@@ -1234,6 +1234,7 @@ case "${action}" in
 			echo "usb_state=${usb_state}"
 			echo "usb_pid=${usb_rest%%|*}"
 			echo "usb_slot=${usb_rest#*|}"
+			usb_speed="$(mt5700m_usb_speed "${usb_rest#*|}" 2>/dev/null)" && echo "usb_speed_mbps=${usb_speed}"
 		else
 			echo 'usb_state=absent'
 		fi

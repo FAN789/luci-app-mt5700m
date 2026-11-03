@@ -2614,3 +2614,9 @@ msgstr "连接和重拨会将保存的拨号配置应用到模组；自动恢复
 
 msgid "Saved connection settings"
 msgstr "已保存的连接设置"
+
+msgid "Negotiated USB link speed"
+msgstr "模组 USB 实际协商速率"
+
+msgid "480 Mbps (USB 2.0 High-Speed)"
+msgstr "480 Mbps（USB 2.0 高速）"

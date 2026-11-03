@@ -4,8 +4,14 @@
 [![Build Release](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml/badge.svg)](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml)
 
 面向鼎桥（TD Tech）MT5700M-CN 5G 模组的 OpenWrt LuCI 管理插件。
-当前版本 **v3.0.9**：应用 `3.0.9-r1`，原生传输程序 `1.0.1-r1`。安装包以 Releases 中成功完成的构建为准。
+当前版本 **v3.0.10**，应用 `3.0.10-r1`，原生传输程序 `1.0.1-r1`。
 这是插件包，不是整机固件，不包含个人网络配置、短信、SIM 数据或登录凭据。
+
+## 3.0.10 更新
+
+概览现在显示模组自身的 USB 协商速率。若显示 480 Mbps，当前链路为 USB 2.0 High-Speed，这可能限制吞吐。速率随已有状态快照更新，读取失败显示 `--`。需要重新协商时，可在维护窗口通过「模组与 SIM 卡」中的重启模组操作尝试，期间蜂窝和短信会暂时中断。请在重连后核对实际速率。
+
+新增针对同频段双载波的原始 AT 回放回归，覆盖两条不同频点的 n78 载波及下行总带宽 200 MHz。概览的载波详情来自完整状态快照，采样时间显示在页首。
 
 ## 3.0.9 更新
 

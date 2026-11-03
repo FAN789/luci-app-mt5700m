@@ -53,11 +53,16 @@ function mount(n){document.body.replaceChildren(n);return n;}
  root=mount(new Element('div'));responses.signal={code:0,stdout:'sysmode=NR\nsampled_at=1\n'};ctx.ux.signal(root,()=>samples++,()=>errors++);await advance(0);assert.equal(errors,1);root.remove();
  // Overview renders fresh carrier/traffic separately, one countdown, and preserves addresses on RPC failure.
  responses.signal=()=>({code:0,stdout:`sysmode=NR\nrsrp=-90\nrsrq=-5\nsinr=12\nsampled_at=${now/1000}\n`});
- responses.status=()=>({code:0,stdout:`connected=1\nsysmode=NR\noperator=Test\ncarrier_count=2\ncarrier_1=NR|n78|1|x|100|x|x|100\ncarrier_2=NR|n78|2|x|100|x|x|100\nca_active=1\nsnapshot_at=${now/1000}\n`});
+ let usbSpeed='480';
+ responses.status=()=>({code:0,stdout:`connected=1\nsysmode=NR\noperator=Test\nusb_speed_mbps=${usbSpeed}\ncarrier_count=2\ncarrier_1=NR|n78|1|x|100|x|x|100\ncarrier_2=NR|n78|2|x|100|x|x|100\nca_active=1\nsnapshot_at=${now/1000}\n`});
  const overview=load('view/mt5700m/status');root=mount(overview.render());await advance(0);await advance(1000);
  assert.equal(root.querySelectorAll('[data-signal-countdown]').length,1);assert(root.textContent.includes('n78 ×2'));assert(root.textContent.includes('10.0.0.2'));
+ assert(root.textContent.includes('2CA'));
+ assert(root.querySelector('[data-mt-usb-link]').textContent.includes('480 Mbps'));
+ usbSpeed='5000';
  rpcFail=true;await advance(4000);assert(root.textContent.includes('10.0.0.2'));assert(root.textContent.includes('状态待确认'));rpcFail=false;
- const initial=calls.filter(c=>c[0]==='status').length;await advance(61000);assert(calls.filter(c=>c[0]==='status').length>initial);root.remove();
+ const initial=calls.filter(c=>c[0]==='status').length;await advance(61000);assert(calls.filter(c=>c[0]==='status').length>initial);
+ assert.equal(root.querySelector('[data-mt-usb-link]').textContent,'5 Gbps');root.remove();
  // Deferred radio/connection pages must not query advanced controls until expanded.
  for(const name of ['network','connection','system','advanced']){
   responses.network={code:0,stdout:'===== Serving cell: AT^MONSC =====\n^MONSC: NR,460,1,1,1,1,1,1,-90,-5,12\n'};

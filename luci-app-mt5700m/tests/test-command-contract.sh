@@ -34,6 +34,10 @@ shift
 command="$1"
 printf '%s\n' "${command}" >> "${MT5700M_TEST_LOG}"
 case "${command}" in
+	'AT^HFREQINFO?')
+		echo '^HFREQINFO: 0,7,78,630000,3450000,100000,630000,3450000,100000,78,636664,3549960,100000,0,0,1400'
+		echo OK
+		;;
 	'AT^LTEFREQLOCK?')
 		echo "^LTEFREQLOCK: ${MT5700M_TEST_LTE_LOCK:-0}"
 		echo OK
@@ -86,6 +90,14 @@ AT^CELLSCAN=3
 AT+COPS=0
 EOF
 cmp "${TMP}/expected-scan" "${MT5700M_TEST_LOG}" || fail 'cell scan command sequence is incorrect'
+
+# Replay the reported same-band PCC and SCC through the real status entry.
+sh "${AT_HELPER}" status > "${TMP}/status"
+for field in 'carrier_count=2' 'ca_active=1' 'ca_mode=NR-CA' 'ca_dl_bandwidth=200.0'; do
+	grep -Fxq "${field}" "${TMP}/status" || fail "dual n78: missing ${field}"
+done
+grep -q '^carrier_1=NR|n78|630000|' "${TMP}/status" || fail 'missing primary carrier'
+grep -q '^carrier_2=NR|n78|636664|' "${TMP}/status" || fail 'missing secondary carrier'
 
 : > "${MT5700M_TEST_LOG}"
 MT5700M_CELL_SCAN_DIR="${TMP}/async-scan" sh "${AT_HELPER}" cellscan-start >/dev/null

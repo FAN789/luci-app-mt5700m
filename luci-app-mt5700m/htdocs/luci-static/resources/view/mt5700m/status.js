@@ -21,6 +21,13 @@ var callInterfaceDump = rpc.declare({
 });
 var lastSnapshot = null;
 
+function usbLinkLabel(data) {
+    var speed = Number(data.usb_speed_mbps);
+    if (!(speed > 0) || !Number.isFinite(speed)) return '--';
+    if (speed === 480) return _('480 Mbps (USB 2.0 High-Speed)');
+    return speed >= 1000 ? (speed / 1000) + ' Gbps' : speed + ' Mbps';
+}
+
 function firstInterfaceAddress(status, family) {
     var list = status && status[family + '-address'];
     return Array.isArray(list) && list[0] && list[0].address || '';
@@ -143,6 +150,8 @@ return view.extend({
                     }).catch(function(){var label=root.querySelector('.mt5700m-updated');if(label)label.textContent='读取失败 · 保留上次统计';});});
                 }else{
                     var carrier=root.querySelector('[data-mt-carrier]');if(carrier)carrier.replaceWith(self.carrierCard(self.carrierInfo(parsed)));
+                    var usbLink = root.querySelector('[data-mt-usb-link]');
+                    if (usbLink) usbLink.textContent = usbLinkLabel(parsed);
                     var operator=root.querySelector('[data-mt-operator]');if(operator)operator.textContent=parsed.operator||'--';
                     var mode=root.querySelector('[data-mt-mode]');if(mode)mode.textContent=parsed.sysmode_detail||parsed.sysmode||'--';
                 }
@@ -453,7 +462,8 @@ return view.extend({
             'class': 'mt5700m-summary'
         }, !reachable ? _('The modem did not respond. Check the module connection.') : connected ? _('Mobile network is connected and ready.') : _('The module is online, but mobile data is not connected.')), E('div', {
             'class': 'mt5700m-hero-meta'
-        }, [E('span', {}, [_('Operator'), E('strong', {'data-mt-operator':''}, operator || '--')]), E('span', {}, [_('Network Mode'), E('strong', {'data-mt-mode':''}, data.sysmode_detail || data.sysmode || '--')]), E('span', {}, [_('Network interface'), E('strong', {}, data.network_interface || '--')])]), E('div', {
+        }, [E('span', {}, [_('Operator'), E('strong', {'data-mt-operator':''}, operator || '--')]), E('span', {}, [_('Network Mode'), E('strong', {'data-mt-mode':''}, data.sysmode_detail || data.sysmode || '--')]), E('span', {}, [_('Network interface'), E('strong', {}, data.network_interface || '--')]),
+            E('span', { title: _('Negotiated USB link speed') }, ['USB ', E('strong', {'data-mt-usb-link':''}, usbLinkLabel(data))])]), E('div', {
             'class': 'mt5700m-hero-foot'
         }, [E('span', {
             'class': res.manager.internet_verified === true ? 'mt5700m-hero-health' : '',
