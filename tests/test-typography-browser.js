@@ -17,7 +17,7 @@ function themeFile(name, expected) {
 const theme = themeFile('cascade.css', 'f428caeef6ae87f621eae98704814504854836b0adfcca11f40c964bf85fb65c');
 const dark = themeFile('dark.css', 'f27c8eff398b68a60b5048cb619fecf3621a48c9081e024363d4d5d1ce991a3c');
 const names = ['status', 'connection', 'connection-expanded', 'network', 'network-expanded',
-    'sms', 'sms-settings', 'system', 'system-expanded', 'advanced', 'advanced-expanded'];
+    'network-refreshed', 'sms', 'sms-settings', 'system', 'system-expanded', 'advanced', 'advanced-expanded'];
 
 (async () => {
     const browser = await chromium.launch({headless: true,
@@ -50,9 +50,22 @@ const names = ['status', 'connection', 'connection-expanded', 'network', 'networ
                             const style = getComputedStyle(element);
                             if (style.visibility === 'hidden') continue;
                             textElements++;
-                            const minimum = element.closest('pre,code') ? 13 : element.tagName === 'H3' ? 17 : 14;
+                            const minimum = element.closest('pre,code') ? 13 : element.matches('h3,.mt-ui-summary-title,.mt-freq-card h4,.mt-sms-sidehead strong,.mt-sms-chathead strong') ? 17 : 14;
                             if (parseFloat(style.fontSize) < minimum) {
                                 failures.push({tag: element.tagName, class: element.className, size: style.fontSize});
+                            }
+                        }
+                        const exact = document.querySelector('[data-mt-signal]')
+                            ? ['.mt5700m-hero-foot', '.mt5700m-hero-health', '[data-overview-age]', 'a.mt5700m-card-link']
+                            : document.querySelector('[data-net-signal-time]') ? ['[data-net-signal-time]'] : [];
+                        for (const selector of exact) {
+                            const elements = document.querySelectorAll(selector);
+                            if (!elements.length) failures.push({missing: selector});
+                            for (const element of elements) {
+                                const style = getComputedStyle(element);
+                                if (style.fontSize !== '14px' || Math.abs(parseFloat(style.lineHeight) - 22.4) > 0.1) {
+                                    failures.push({selector, size: style.fontSize, lineHeight: style.lineHeight});
+                                }
                             }
                         }
                         return {failures, textElements, overflow: document.documentElement.scrollWidth > innerWidth,
@@ -60,7 +73,7 @@ const names = ['status', 'connection', 'connection-expanded', 'network', 'networ
                     });
                     const context = `${name}, ${mode}, ${width}px`;
                     assert(result.roots && result.textElements, 'No actual plugin content: ' + context);
-                    assert.deepEqual(result.failures, [], context);
+                    assert.equal(result.failures.length, 0, context + ': ' + JSON.stringify(result.failures));
                     assert(!result.overflow, 'Horizontal overflow: ' + context);
                     if (process.env.MT5700M_SCREENSHOTS) {
                         fs.mkdirSync(process.env.MT5700M_SCREENSHOTS, {recursive: true});

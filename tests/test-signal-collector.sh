@@ -68,7 +68,17 @@ cat >"$testroot/bin/sleep" <<'EOF'
 echo "$1" >>"$TEST_ROOT/delays"
 if [ "$(wc -l <"$TEST_ROOT/delays")" -ge 4 ]; then kill -TERM "$PPID"; fi
 EOF
-chmod 700 "$testroot/loop-at" "$testroot/bin/sleep"
+# The scheduling fixture has no real sleeps. A second boundary in real uptime
+# would otherwise subtract processing time from the exact expected delays.
+cat >"$testroot/bin/cut" <<'EOF'
+#!/bin/sh
+if [ "$*" = '-d. -f1 /proc/uptime' ]; then
+ echo 1000
+else
+ exec /usr/bin/cut "$@"
+fi
+EOF
+chmod 700 "$testroot/loop-at" "$testroot/bin/sleep" "$testroot/bin/cut"
 MT5700M_AT_HELPER="$testroot/loop-at" PATH="$testroot/bin:$PATH" sh "$collector" run
 [ "$(tr '\n' ' ' <"$testroot/delays")" = '10 15 5 5 ' ]
 echo 'PASS: real signal skips SMS lock; daemon failures back off and success/busy restore normal cadence'

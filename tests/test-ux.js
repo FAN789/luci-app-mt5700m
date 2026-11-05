@@ -109,6 +109,7 @@ assert(root.textContent.includes('n78 ×2'));assert(root.textContent.includes('1
     if(detail.listeners.toggle)detail.listeners.toggle({currentTarget:detail,target:detail});
    }
    await advance(1000);snapshot(name+'-expanded',root);
+   if(name==='network'){await advance(6000);snapshot('network-refreshed',root);}
   }
   root.remove();
  }

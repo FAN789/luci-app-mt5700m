@@ -8,9 +8,9 @@ return view.extend(ux.defer({
     load: function() { return ux.read(['advanced','hardware']); },
     styleNode: function() {
         return E('style', {}, [
-            '.mt-hardware{max-width:1120px;margin:0 auto}.mt-hardware-head{padding:22px 24px;border-radius:15px;background:linear-gradient(135deg,#263b59,#354d70);color:#fff;margin-bottom:16px}.mt-hardware-head h2{color:#fff;margin:0 0 7px;font-size:24px}.mt-hardware-head p{margin:0;opacity:.84;font-size:14px;line-height:1.55}',
+            '.mt-hardware{max-width:1120px;margin:0 auto}.mt-hardware-head{padding:22px 24px;border-radius:15px;background:linear-gradient(135deg,#263b59,#354d70);color:#fff;margin-bottom:16px}.mt-hardware-head h2{color:#fff;margin:0 0 7px;font-size:24px}.mt-hardware-head p{margin:0;opacity:.84;font-size:14px;line-height:1.6}',
             '.mt-hardware-warning{margin-bottom:14px}.mt-hardware-details{margin-top:14px;border:1px solid var(--border-color-medium,#d9dde4);border-radius:11px;overflow:hidden}.mt-hardware-details summary{cursor:pointer;padding:12px 14px;font-size:14px;font-weight:650}.mt-hardware-raw{margin:0;padding:14px;background:#17202a;color:#dce6ef;white-space:pre-wrap;word-break:break-word;font:13px/1.55 monospace;max-height:420px;overflow:auto}',
-            '.mt-hardware-tools{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-top:18px;padding:16px 18px}.mt-hardware-tools h3{margin:0 0 4px;font-size:17px}.mt-hardware-tools p{margin:0;color:var(--mt-ui-muted);font-size:14px;line-height:1.45}.mt-hardware-tool-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}',
+            '.mt-hardware-tools{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-top:18px;padding:16px 18px}.mt-hardware-tools h3{margin:0 0 4px;font-size:17px}.mt-hardware-tools p{margin:0;color:var(--mt-ui-muted);font-size:14px;line-height:1.6}.mt-hardware-tool-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}',
             '@media(max-width:760px){.mt-hardware-head{padding:20px}.mt-hardware-tools{display:block}.mt-hardware-tool-actions{justify-content:flex-start;margin-top:12px}}'
         ].join(''));
     },
