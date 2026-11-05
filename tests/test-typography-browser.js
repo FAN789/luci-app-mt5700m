@@ -10,11 +10,11 @@ const themeDirectory = process.env.ARGON_CSS_DIR;
 assert(fixtures && themeDirectory, 'Set MT5700M_DOM_DIR and ARGON_CSS_DIR');
 const resources = path.resolve(__dirname, '../luci-app-mt5700m/htdocs/luci-static/resources');
 function themeFile(name, expected) {
-    const content = fs.readFileSync(path.join(themeDirectory, name), 'utf8');
+    const content = fs.readFileSync(path.join(themeDirectory, name), 'utf8').replace(/\r\n/g, '\n');
     assert.equal(crypto.createHash('sha256').update(content).digest('hex'), expected);
     return content;
 }
-const theme = themeFile('cascade.css', 'd43f3f2c69221677a9a1dbbebca85d9630b830fc967da4fc0d4a5581e4616bbb');
+const theme = themeFile('cascade.css', 'f428caeef6ae87f621eae98704814504854836b0adfcca11f40c964bf85fb65c');
 const dark = themeFile('dark.css', 'f27c8eff398b68a60b5048cb619fecf3621a48c9081e024363d4d5d1ce991a3c');
 const names = ['status', 'connection', 'connection-expanded', 'network', 'network-expanded',
     'sms', 'sms-settings', 'system', 'system-expanded', 'advanced', 'advanced-expanded'];
