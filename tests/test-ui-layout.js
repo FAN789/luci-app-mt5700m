@@ -15,7 +15,7 @@ assert(css.includes('.mt5700m-traffic-split>span{display:block}'));
 assert(css.includes('font-variant-numeric:tabular-nums'));
 assert(css.includes('.mt5700m-signal-valuestrong{font-size:32px'));
 assert(css.includes('.mt5700m-traffic-value{font-size:22px'));
-assert(css.includes('.mt-signal-countdown{font-size:12px'));
+assert(css.includes('.mt-signal-countdown{font-size:14px'));
 assert(css.includes('height:38px;min-height:38px;margin:0'));
 assert(css.includes('.mt5700m-hero-side{display:flex;flex-direction:row;align-items:center;gap:10px}'));
 assert(css.includes('min-height:44px'));
@@ -29,3 +29,6 @@ console.log('PASS: scoped theme protection, responsive layout, typography, check
 
 assert(css.includes('.mt-ui-page.mt-ui-page{width:100%;max-width:none;min-width:0;box-sizing:border-box}'));
 assert(css.includes('.mt-signal-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px'));
+
+const version=fs.readFileSync(path.join(root,'Makefile'),'utf8').match(/^PKG_VERSION:=(.+)$/m)[1].trim();
+assert(fs.readFileSync(path.join(root,'htdocs/luci-static/resources/mt5700m/ux.js'),'utf8').includes('?v='+version),'CSS cache version must follow release version');

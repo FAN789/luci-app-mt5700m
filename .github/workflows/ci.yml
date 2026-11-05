@@ -9,6 +9,30 @@ permissions:
   contents: read
 
 jobs:
+  typography-browser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned browser test runtime
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: Fetch pinned Argon CSS fixtures
+        run: |
+          mkdir -p "$RUNNER_TEMP/argon"
+          for name in cascade.css dark.css; do
+            curl -fL --retry 3 "https://raw.githubusercontent.com/jerrykuku/luci-theme-argon/9f5d1e79e67623f4006a86471116b6745ea845f7/htdocs/luci-static/argon/css/$name" -o "$RUNNER_TEMP/argon/$name"
+          done
+      - name: Validate rendered typography and responsive views
+        env:
+          MT5700M_DOM_DIR: ${{ runner.temp }}/mt5700m-dom
+          ARGON_CSS_DIR: ${{ runner.temp }}/argon
+        run: |
+          node tests/test-ux.js
+          node tests/test-typography-browser.js
   static-checks:
     runs-on: ubuntu-latest
     steps:

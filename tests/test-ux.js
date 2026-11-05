@@ -41,6 +41,31 @@ vm.createContext(ctx);vm.runInContext("String.prototype.format=function(...args)
 function load(name){return vm.runInContext('(function(){'+fs.readFileSync(path.join(R,name+'.js'),'utf8')+'})()',ctx);}
 ctx.ux=load('mt5700m/ux');ctx.controls=load('mt5700m/controls');
 function mount(n){document.body.replaceChildren(n);return n;}
+// Optional snapshots let browser tests inspect the actual view output below.
+function snapshot(name, root) {
+ const directory = process.env.MT5700M_DOM_DIR;
+ if (!directory) return;
+ function escape(value) {
+  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
+ }
+ function serialize(node) {
+  if (node.tagName === '#text') return escape(node._text);
+  const attrs = {...node.attrs, class: node.className};
+  if (node.open) attrs.open = '';
+  if (node.disabled) attrs.disabled = '';
+  if (node.hidden) attrs.hidden = '';
+  const attributes = Object.entries(attrs)
+   .filter(([key, value]) => typeof value !== 'function' && key !== 'style')
+   .map(([key, value]) => key + '="' + escape(value) + '"');
+  const style = [typeof node.attrs.style === 'string' ? node.attrs.style : '',
+   ...Object.entries(node.style).map(([key, value]) => key.replace(/[A-Z]/g, c => '-' + c.toLowerCase()) + ':' + value)].join(';');
+  attributes.push('style="' + escape(style) + '"');
+  const children = node.tagName === 'style' ? node.textContent : escape(node._text) + node.children.map(serialize).join('');
+  return '<' + node.tagName + ' ' + attributes.join(' ') + '>' + children + '</' + node.tagName + '>';
+ }
+ fs.mkdirSync(directory, {recursive: true});
+ fs.writeFileSync(path.join(directory, name + '.html'), serialize(root));
+}
 (async()=>{
  // Cached reads coalesce and failures can be retried.
  responses.signal=()=>({code:0,stdout:`sysmode=NR\nrsrp=-90\nrsrq=-5\nsinr=12\nsampled_at=${now/1000}\n`});
@@ -69,7 +94,7 @@ assert(root.textContent.includes('n78 ×2'));assert(root.textContent.includes('1
  usbSpeed='5000';
  rpcFail=true;await advance(4000);assert(root.textContent.includes('10.0.0.2'));assert(root.textContent.includes('状态待确认'));rpcFail=false;
  const initial=calls.filter(c=>c[0]==='status').length;await advance(61000);assert(calls.filter(c=>c[0]==='status').length>initial);
- assert.equal(root.querySelector('[data-mt-usb-link]').textContent,'5 Gbps');root.remove();
+ assert.equal(root.querySelector('[data-mt-usb-link]').textContent,'5 Gbps');snapshot('status',root);root.remove();
  // Deferred radio/connection pages must not query advanced controls until expanded.
  for(const name of ['network','connection','system','advanced']){
   responses.network={code:0,stdout:'===== Serving cell: AT^MONSC =====\n^MONSC: NR,460,1,1,1,1,1,1,-90,-5,12\n'};
@@ -77,6 +102,14 @@ assert(root.textContent.includes('n78 ×2'));assert(root.textContent.includes('1
   assert(!root.textContent.includes('读取失败'),name+' render failed');
   if(name==='network')assert(!calls.some(c=>c[0]==='advanced'),'radio queried eagerly');
   if(name==='connection')assert(!calls.some(c=>c[0]==='advanced'),'connection queried eagerly');
+  snapshot(name,root);
+  if(process.env.MT5700M_DOM_DIR){
+   for(const detail of root.querySelectorAll('details')){
+    detail.open=true;
+    if(detail.listeners.toggle)detail.listeners.toggle({currentTarget:detail,target:detail});
+   }
+   await advance(1000);snapshot(name+'-expanded',root);
+  }
   root.remove();
  }
  // SMS read errors are never reported as a successful empty inbox. Refresh preserves a draft.
@@ -85,8 +118,10 @@ assert(root.textContent.includes('n78 ×2'));assert(root.textContent.includes('1
  const draft=root.querySelector('textarea');draft.value='unsent draft';
  responses['sms-list']={code:0,stdout:'OK\n'};responses['sms-info']={code:0,stdout:'^IMSSWITCH: 1\n+CSCA: "12345"\n+CPMS: "SM",0,100\nOK\n'};
  await sms.refreshMessages();assert.equal(draft.value,'unsent draft');assert(!root.querySelectorAll('button').find(x=>x.textContent==='设置').disabled);
+ snapshot('sms',root);
  // Settings save no-op must make no writes; changed fields run serially and stop after a failure.
  const info={ims:'1',smsc:'12345',storage:['SM','0','100']};sms.settingsModal(info);let modalRoot=new Element('div',{},modal.nodes);calls=[];
+ snapshot('sms-settings',modalRoot);
  await modalRoot.querySelectorAll('button').find(x=>x.textContent==='Save settings').click();await flush();assert.equal(calls.length,0);
  sms.settingsModal(info);modalRoot=new Element('div',{},modal.nodes);modalRoot.querySelectorAll('input')[0].value='54321';modalRoot.querySelectorAll('select')[1].value='ME';
  responses['sms-set']=()=>{throw Error('simulated rejection')};calls=[];modalRoot.querySelectorAll('button').find(x=>x.textContent==='Save settings').click();await flush();

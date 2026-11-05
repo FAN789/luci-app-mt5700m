@@ -94,5 +94,5 @@ function signal(root, render, failed, tick) {
         }).catch(function() { if (root.isConnected) failed(); });
     }, tick);
 }
-function style() { return E('link', {rel:'stylesheet', href:L.resource('mt5700m/ux.css') + '?v=20261031-1'}); }
+function style() { return E('link', {rel:'stylesheet', href:L.resource('mt5700m/ux.css') + '?v=3.0.12'}); }
 return baseclass.extend({read:read,values:values,age:age,ageText:ageText,watch:watch,lazy:lazy,defer:defer,signal:signal,style:style});
