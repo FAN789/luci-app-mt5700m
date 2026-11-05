@@ -256,7 +256,7 @@ return view.extend({
         function countdown() {
             return E('small', {
                 'data-signal-countdown': '',
-                'style': 'display:inline-block;float:right;padding:2px 6px;border-radius:5px;background:var(--background-color-low,#eef2f6);font-size:10px;font-weight:normal;white-space:nowrap',
+                'class': 'mt-signal-countdown',
                 'title': '这些信号指标使用同一次查询，同步刷新'
             }, '等待刷新');
         }
@@ -264,16 +264,15 @@ return view.extend({
             'class': 'mt5700m-focus mt-ui-card',
             'data-mt-signal': ''
         }, [E('div', {
-            'data-signal-time': '',
-            'role': 'status',
-            'style': 'font-size:11px'
-        }, data.signalUpdated || '等待动态信号更新…'), E('div', {
             'class': 'mt5700m-focus-head'
         }, [E('div', {}, [E('div', {
             'class': 'mt5700m-focus-title'
-        }, _('Signal'))]), countdown(), E('span', {
+        }, _('Signal'))]), E('div', {'class': 'mt-signal-actions'}, [countdown(), E('span', {
             'class': 'mt5700m-badge ' + quality.cls
-        }, quality.label)]), E('div', {
+        }, quality.label)])]), E('div', {
+            'data-signal-time': '',
+            'role': 'status'
+        }, data.signalUpdated || '等待动态信号更新…'), E('div', {
             'class': 'mt5700m-signal-value'
         }, [E('strong', {}, isNaN(rsrp) ? '--' : String(data.rsrp)), E('span', {}, 'RSRP · dBm')]), E('div', {
             'class': 'mt5700m-signal-bars ' + quality.cls,

@@ -2,9 +2,9 @@
 .mt-ui-page { --mt-ui-muted:var(--text-color-medium,#69717d); font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; line-height:1.6; font-weight:400; letter-spacing:normal; overflow-wrap:anywhere; box-sizing:border-box; width:100%; }
 .mt-ui-page :is(h2,h3,strong) {font-weight:600}
 .mt-ui-page :is(.mt5700m-title,.mt-ui-hero h2) {font-size:24px;line-height:1.35}
-.mt-ui-page :is(.mt5700m-focus-title,.mt-control-card h3,.mt5700m-traffic-head h3) {font-size:16px}
-.mt-ui-page :is(.mt-control-row label,.mtconn-label,.mt-net-label,.mt-control-desc,.mt-control-state,.mtconn-session-row,.mt-system-row,.mt-net-row) {font-size:13px;line-height:1.6}
-.mt-ui-page :is(.mt5700m-hero-meta,.mt5700m-mini span,.mt5700m-ip-head,.mt5700m-ip-meta,.mt5700m-updated,.mt5700m-legend,.mt5700m-traffic-label,.mt5700m-traffic-split,.mt5700m-day,.mt5700m-shortcut span,.mt-ui-summary-desc,.mt-sms-contact-date,.mt-sms-bubbledate,.mt-sms-storage,.mt-control-note,.mt5700m-badge,.mt5700m-band) {font-size:12px;line-height:1.6}
+.mt-ui-page :is(.mt5700m-focus-title,.mt-control-card h3,.mt5700m-traffic-head h3) {font-size:17px}
+.mt-ui-page :is(.mt-control-row label,.mtconn-label,.mt-net-label,.mt-control-desc,.mt-control-state,.mtconn-session-row,.mt-system-row,.mt-net-row) {font-size:14px;line-height:1.6}
+.mt-ui-page :is(.mt5700m-hero-meta,.mt5700m-mini span,.mt5700m-ip-head,.mt5700m-ip-meta,.mt5700m-updated,.mt5700m-legend,.mt5700m-traffic-label,.mt5700m-traffic-split,.mt5700m-day,.mt5700m-shortcut span,.mt-ui-summary-desc,.mt-sms-contact-date,.mt-sms-bubbledate,.mt-sms-storage,.mt-control-note,.mt5700m-badge,.mt5700m-band) {font-size:14px;line-height:1.6}
 .mt-ui-page :is(input,select,textarea,button,.btn) {font-family:inherit;font-size:14px;line-height:1.5}
 .mt-ui-page .btn {display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:6px 12px;box-sizing:border-box}
 .mt-ui-page .mtconn-actions {margin-top:12px}
@@ -59,3 +59,8 @@
  .mt-ui-page .mt-sms-settings-row{grid-template-columns:1fr;gap:4px}
 }
 @media(max-width:650px){.mt-ui-page .mt5700m-focus-grid{grid-template-columns:1fr}.mt-ui-page .mt-net-metrics{gap:7px}.mt-ui-page .mt-net-metric{padding:10px}.mt-ui-page .mt-lazy-body{padding:12px}}
+
+.mt-ui-page.mt-ui-page {width:100%;max-width:none;min-width:0;box-sizing:border-box}
+.mt-ui-page .mt-signal-actions {display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-left:auto;min-width:0}
+.mt-ui-page .mt5700m-focus-head {align-items:center;gap:8px}
+.mt-ui-page [data-signal-time] {font-size:14px;margin:4px 0 8px}

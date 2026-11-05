@@ -56,7 +56,14 @@ function mount(n){document.body.replaceChildren(n);return n;}
  let usbSpeed='480';
  responses.status=()=>({code:0,stdout:`connected=1\nsysmode=NR\noperator=Test\nusb_speed_mbps=${usbSpeed}\ncarrier_count=2\ncarrier_1=NR|n78|1|x|100|x|x|100\ncarrier_2=NR|n78|2|x|100|x|x|100\nca_active=1\nsnapshot_at=${now/1000}\n`});
  const overview=load('view/mt5700m/status');root=mount(overview.render());await advance(0);await advance(1000);
- assert.equal(root.querySelectorAll('[data-signal-countdown]').length,1);assert(root.textContent.includes('n78 ×2'));assert(root.textContent.includes('10.0.0.2'));
+ assert.equal(root.querySelectorAll('[data-signal-countdown]').length,1);
+ const signalCard=root.querySelector('[data-mt-signal]');
+ assert(signalCard.children[0].className.includes('mt5700m-focus-head'));
+ assert.equal(signalCard.children[1].attrs['data-signal-time'],'');
+ const signalActions=root.querySelector('[data-signal-countdown]').parentNode;
+ assert.equal(signalActions.className,'mt-signal-actions');
+ assert(signalActions.children.some(n=>n.className.includes('mt5700m-badge')));
+assert(root.textContent.includes('n78 ×2'));assert(root.textContent.includes('10.0.0.2'));
  assert(root.textContent.includes('2CA'));
  assert(root.querySelector('[data-mt-usb-link]').textContent.includes('480 Mbps'));
  usbSpeed='5000';

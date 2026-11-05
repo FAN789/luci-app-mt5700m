@@ -26,3 +26,6 @@ assert(status.includes("_('Download %s')")&&status.includes("_('Upload %s')"));
 const po=fs.readFileSync(path.join(root,'po/zh_Hans/mt5700m.po'),'utf8');
 for(const msg of ['Download %s','Upload %s'])assert(po.includes(`msgid "${msg}"`));
 console.log('PASS: scoped theme protection, responsive layout, typography, checkbox, translated traffic, aligned controls and 44px mobile actions');
+
+assert(css.includes('.mt-ui-page.mt-ui-page{width:100%;max-width:none;min-width:0;box-sizing:border-box}'));
+assert(css.includes('.mt-signal-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px'));

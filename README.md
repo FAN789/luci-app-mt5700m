@@ -4,8 +4,12 @@
 [![Build Release](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml/badge.svg)](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml)
 
 面向鼎桥（TD Tech）MT5700M-CN 5G 模组的 OpenWrt LuCI 管理插件。
-当前版本 **v3.0.10**，应用 `3.0.10-r1`，原生传输程序 `1.0.1-r1`。
+当前版本 **v3.0.11**，应用 `3.0.11-r1`，原生传输程序 `1.0.1-r1`。
 这是插件包，不是整机固件，不包含个人网络配置、短信、SIM 数据或登录凭据。
+
+## 3.0.11 更新
+
+修复 #14 信号卡片标题错位、倒计时居中和页面宽度收窄。采样时间位于标题下方，倒计时与质量徽章在右侧成组显示。六个页面统一利用可用宽度，正文、表单标签和主要辅助文字调整为 14px，卡片标题 17px，保留窄屏自适应和主要大数字。
 
 ## 3.0.10 更新
 
