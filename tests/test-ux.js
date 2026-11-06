@@ -113,6 +113,12 @@ assert(root.textContent.includes('n78 ×2'));assert(root.textContent.includes('1
   }
   root.remove();
  }
+ if(process.env.MT5700M_DOM_DIR){
+  for(const name of ['terminal','settings']){
+   const auxiliary=load('view/mt5700m/'+name);
+   root=mount(await auxiliary.render());await advance(1000);snapshot(name,root);root.remove();
+  }
+ }
  // SMS read errors are never reported as a successful empty inbox. Refresh preserves a draft.
  const sms=load('view/mt5700m/sms');responses['sms-list']={code:75,stderr:'busy'};responses['sms-info']={code:75,stderr:'busy'};
  root=mount(sms.render());await advance(0);assert(root.textContent.includes('短信读取失败'));assert(root.querySelectorAll('button').find(x=>x.textContent==='设置').disabled);

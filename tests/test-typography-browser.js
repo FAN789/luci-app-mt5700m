@@ -17,7 +17,7 @@ function themeFile(name, expected) {
 const theme = themeFile('cascade.css', 'f428caeef6ae87f621eae98704814504854836b0adfcca11f40c964bf85fb65c');
 const dark = themeFile('dark.css', 'f27c8eff398b68a60b5048cb619fecf3621a48c9081e024363d4d5d1ce991a3c');
 const names = ['status', 'connection', 'connection-expanded', 'network', 'network-expanded',
-    'network-refreshed', 'sms', 'sms-settings', 'system', 'system-expanded', 'advanced', 'advanced-expanded'];
+    'terminal', 'settings', 'network-refreshed', 'sms', 'sms-settings', 'system', 'system-expanded', 'advanced', 'advanced-expanded'];
 
 (async () => {
     const browser = await chromium.launch({headless: true,

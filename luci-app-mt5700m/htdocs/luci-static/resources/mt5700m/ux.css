@@ -70,3 +70,17 @@
 .mt-ui-page .mt-signal-actions {display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-left:auto;min-width:0}
 .mt-ui-page .mt5700m-focus-head {align-items:center;gap:8px}
 .mt-ui-page [data-signal-time] {font-size:14px;margin:4px 0 8px}
+
+.mt-ui-page .mtconn-log pre {font-size:14px;line-height:1.6}
+.mt-ui-page .mt5700m-shortcut strong {font-size:16px;line-height:1.5;font-weight:600}
+.mt-ui-page .mt5700m-shortcut b {font-size:22px;line-height:1;flex-shrink:0}
+.mt-ui-page .mt-lazy>summary {font-size:17px;line-height:1.45;font-weight:600}
+.mt-ui-page .mt-hardware-warning {font-size:14px;line-height:1.6;font-weight:400}
+.mt-ui-page .mt5700m-terminal-row input {font-family:ui-monospace,Consolas,monospace;font-size:14px;line-height:1.5}
+.mt-ui-page .mt5700m-output {font-size:14px;line-height:1.6}
+.mt-ui-page .mt-terminal-warning,.mt-ui-page .mt-diag-badge {font-size:14px;line-height:1.6}
+@media(min-width:769px){
+ .mt-ui-page .mtconn-config {--mtconn-control-height:40px}
+ .mt-ui-page .mtconn-config .cbi-value-title {font-size:14px;line-height:1.6;padding-top:calc((var(--mtconn-control-height) - 1.6em)/2);padding-bottom:0;margin-top:0}
+ .mt-ui-page .mtconn-config .cbi-value-field :is(input:not([type=checkbox]):not([type=radio]),select,.cbi-dropdown) {min-height:var(--mtconn-control-height);box-sizing:border-box}
+}
