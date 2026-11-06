@@ -699,6 +699,13 @@ print_carrier_aggregation() {
 				ul_frequency = field[i + 5] / frequency_divisor
 				dl_bandwidth = field[i + 3] / 1000
 				ul_bandwidth = field[i + 6] / 1000
+				# Only complete NR records with both UL coordinates zero are invalid.
+				# LTE 1.4 MHz is legitimate; missing/malformed records are skipped above.
+				if (radio == "NR") {
+					ul_valid = (field[i + 4] + 0 != 0 || field[i + 5] + 0 != 0)
+					if (!ul_valid) ul_bandwidth = 0
+					printf "carrier_%d_ul_valid=%d\n", count, ul_valid
+				}
 				dl_total += dl_bandwidth
 				ul_total += ul_bandwidth
 				printf "carrier_%d=%s|%s|%s|%.2f|%.1f|%s|%.2f|%.1f\n", count,

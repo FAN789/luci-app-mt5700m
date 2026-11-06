@@ -96,6 +96,32 @@ assert(root.textContent.includes('n78 + n78'));assert(root.textContent.includes(
  const initial=calls.filter(c=>c[0]==='status').length;await advance(61000);assert(calls.filter(c=>c[0]==='status').length>initial);
  assert.equal(root.querySelector('[data-mt-usb-link]').textContent,'5 Gbps');snapshot('status',root);root.remove();
 
+ // A cold full snapshot cannot block the local preview; retries retain valid data.
+ let complete, failFull, fullCalls=0;
+ responses.status=()=>{fullCalls++;return new Promise((resolve,reject)=>{complete=resolve;failFull=reject;});};
+ root=mount(overview.render());await advance(0);
+ assert(root.textContent.includes('10.0.0.2'));assert(root.querySelector('.mt5700m-traffic'));
+ assert(!root.querySelector('[data-mt-signal]'));assert(root.textContent.includes('正在读取模组详情'));
+ assert(root.querySelectorAll('style').length>=2,'preview includes both style blocks');snapshot('preview',root);
+ await overview._refreshSnapshot();assert.equal(fullCalls,1,'repeat clicks coalesce while pending');
+ failFull(Error('cold snapshot failed'));await flush();
+ assert(root.textContent.includes('10.0.0.2'));assert(root.textContent.includes('不能据此判断模组断网'));
+ const retry=overview._refreshSnapshot();await flush();assert.equal(fullCalls,2);
+ complete({code:0,stdout:`connected=1\nsysmode=NR\nsnapshot_at=${now/1000}\n`});await retry;
+ assert(root.querySelector('[data-mt-signal]'));assert(root.querySelector('.mt-loading').hidden);
+ root.remove();
+ // Fast failures never issue the slow query or invent a disconnected state.
+ rpcFail=true;root=mount(overview.render());await advance(0);assert.equal(fullCalls,2);
+ assert(root.textContent.includes('不能据此判断模组断网'));root.remove();rpcFail=false;
+ // Detached pages never issue a new AT snapshot after fast RPCs finish.
+ root=mount(overview.render());root.remove();await advance(0);assert.equal(fullCalls,2);
+ await assert.rejects(overview.fetchStatus(()=>{throw Error('preview render failed');}), /preview render failed/);assert.equal(fullCalls,2,'preview render errors must surface before starting the slow read');
+ // Missing UL validity is unknown; only an explicit invalid flag replaces the bandwidth.
+ const invalid={carrier_count:'1',carrier_1:'NR|n78|1|3500|100|0|0|0',carrier_1_ul_valid:'0'};
+ assert(overview.carrierCard(overview.carrierInfo(invalid)).textContent.includes('No valid uplink information'));
+ assert(!overview.carrierCard(overview.carrierInfo({...invalid,carrier_1_ul_valid:undefined})).textContent.includes('No valid uplink information'));
+ responses.status=()=>({code:0,stdout:`connected=1\nsysmode=NR\nsnapshot_at=${now/1000}\n`});
+
  // Carrier semantics, address transitions, history pagination and timing preference.
  const sample={carrier_count:'2',ca_active:'1',dc_active:'0',ca_mode:'NR-CA',snapshot_at:String(now/1000),
   carrier_1:'NR|n78|1|3500|100|1|3500|100',carrier_2:'NR|n78|2|3600|100|2|3600|100'};
@@ -171,7 +197,9 @@ assert(root.textContent.includes('n78 + n78'));assert(root.textContent.includes(
  const draft=root.querySelector('textarea');draft.value='unsent draft';
  responses['sms-list']={code:0,stdout:'OK\n'};responses['sms-info']={code:0,stdout:'^IMSSWITCH: 1\n+CSCA: "12345"\n+CPMS: "SM",0,100\nOK\n'};
  await sms.refreshMessages();assert.equal(draft.value,'unsent draft');assert(!root.querySelectorAll('button').find(x=>x.textContent==='设置').disabled);
- snapshot('sms',root);
+ storage['mt5700m.sms.sent']=JSON.stringify([{number:'+12345678901234567890',text:'Long message preview for wrapping and overlap regression',date:'2026-11-06 12:00'}, {number:'10001',text:'Second conversation preview',date:'2026-11-06 12:01'}]);
+ responses['sms-list']={code:0,stdout:'OK\n'};
+ await sms.refreshMessages();assert(root.querySelectorAll('.mt-sms-contact').length>=2);snapshot('sms',root);
  // Settings save no-op must make no writes; changed fields run serially and stop after a failure.
  const info={ims:'1',smsc:'12345',storage:['SM','0','100']};sms.settingsModal(info);let modalRoot=new Element('div',{},modal.nodes);calls=[];
  snapshot('sms-settings',modalRoot);

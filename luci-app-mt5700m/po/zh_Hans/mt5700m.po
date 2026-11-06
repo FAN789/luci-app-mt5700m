@@ -2656,3 +2656,6 @@ msgstr "收起为最近 7 条"
 
 msgid "Earliest record: %s"
 msgstr "最早可用记录：%s"
+
+msgid "No valid uplink information"
+msgstr "无有效上行信息"

@@ -16,7 +16,7 @@ function themeFile(name, expected) {
 }
 const theme = themeFile('cascade.css', 'f428caeef6ae87f621eae98704814504854836b0adfcca11f40c964bf85fb65c');
 const dark = themeFile('dark.css', 'f27c8eff398b68a60b5048cb619fecf3621a48c9081e024363d4d5d1ce991a3c');
-const names = ['history', 'status', 'connection', 'connection-expanded', 'network', 'network-expanded',
+const names = ['preview', 'history', 'status', 'connection', 'connection-expanded', 'network', 'network-expanded',
     'terminal', 'settings', 'network-refreshed', 'sms', 'sms-settings', 'system', 'system-expanded', 'advanced', 'advanced-expanded'];
 
 (async () => {
@@ -41,6 +41,19 @@ const names = ['history', 'status', 'connection', 'connection-expanded', 'networ
                         (mode === 'dark' ? dark : '') + 'body{padding:16px;box-sizing:border-box}</style>' +
                         '<div id="outside">Other LuCI page</div>' + fixture);
                     await page.waitForFunction(() => [...document.querySelectorAll('link')].every(link => !!link.sheet));
+                    if (name === 'sms') {
+                        // Enlarge text and impose a theme-like single-line button height.
+                        await page.addStyleTag({content:'.mt-sms-contact {height:32px;max-height:32px} .mt-sms-contact * {font-size:18px !important}'});
+                        const geometry = await page.evaluate(() => {
+                            const items=[...document.querySelectorAll('.mt-sms-contact')];
+                            return items.map((item,i)=>{
+                                const box=item.getBoundingClientRect(), preview=item.querySelector('.mt-sms-contact-preview').getBoundingClientRect();
+                                const top=item.querySelector('.mt-sms-contact-top').getBoundingClientRect();
+                                return box.bottom>=preview.bottom && preview.top>=top.bottom && (!items[i+1] || box.bottom<=items[i+1].getBoundingClientRect().top+1);
+                            });
+                        });
+                        assert(geometry.length>=2 && geometry.every(Boolean), 'SMS two-row buttons must contain enlarged text without overlap');
+                    }
                     const result = await page.evaluate(() => {
                         const failures = [];
                         let textElements = 0;

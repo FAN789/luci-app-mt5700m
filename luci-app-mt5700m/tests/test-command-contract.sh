@@ -35,7 +35,7 @@ command="$1"
 printf '%s\n' "${command}" >> "${MT5700M_TEST_LOG}"
 case "${command}" in
 	'AT^HFREQINFO?')
-		echo '^HFREQINFO: 0,7,78,630000,3450000,100000,630000,3450000,100000,78,636664,3549960,100000,0,0,1400'
+		echo "${MT5700M_TEST_HFREQ:-^HFREQINFO: 0,7,78,630000,3450000,100000,630000,3450000,100000,78,636664,3549960,100000,0,0,1400}"
 		echo OK
 		;;
 	'AT^LTEFREQLOCK?')
@@ -98,6 +98,17 @@ for field in 'carrier_count=2' 'ca_active=1' 'ca_mode=NR-CA' 'ca_dl_bandwidth=20
 done
 grep -q '^carrier_1=NR|n78|630000|' "${TMP}/status" || fail 'missing primary carrier'
 grep -q '^carrier_2=NR|n78|636664|' "${TMP}/status" || fail 'missing secondary carrier'
+
+for field in 'carrier_1_ul_valid=1' 'carrier_2_ul_valid=0' 'ca_ul_bandwidth=100.0'; do
+    grep -Fxq "$field" "${TMP}/status" || fail "invalid NR UL: $field"
+done
+MT5700M_TEST_HFREQ='^HFREQINFO: 0,7,78,630000,3450000,100000,630000,3450000,100000,78,636664,3549960,100000,636664,3549960,100000' sh "${AT_HELPER}" status > "${TMP}/valid-ul"
+grep -Fxq 'ca_ul_bandwidth=200.0' "${TMP}/valid-ul" || fail 'valid NR UL must be retained'
+MT5700M_TEST_HFREQ='^HFREQINFO: 0,6,1,100,20000,1400,0,0,1400' sh "${AT_HELPER}" status > "${TMP}/lte"
+grep -Fxq 'ca_ul_bandwidth=1.4' "${TMP}/lte" || fail 'LTE 1.4 MHz must not be filtered'
+if grep -q '_ul_valid=' "${TMP}/lte"; then fail 'NR-specific marker on LTE'; fi
+MT5700M_TEST_HFREQ='^HFREQINFO: 0,7,78,630000,3450000,100000,0,0' sh "${AT_HELPER}" status > "${TMP}/missing"
+if grep -q '_ul_valid=0' "${TMP}/missing"; then fail 'incomplete record must remain unknown'; fi
 
 : > "${MT5700M_TEST_LOG}"
 MT5700M_CELL_SCAN_DIR="${TMP}/async-scan" sh "${AT_HELPER}" cellscan-start >/dev/null

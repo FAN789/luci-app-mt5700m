@@ -102,11 +102,22 @@ function trafficUpdated(iface) {
     return '%04d-%02d-%02d %02d:%02d'.format(value.date.year || 0, value.date.month || 0, value.date.day || 0, value.time && value.time.hour || 0, value.time && value.time.minute || 0);
 }
 return view.extend({
-    fetchStatus: function() {
-        return Promise.all([callManagerStatus(), ux.read(['status']), callTraffic(), callInterfaceDump()]).then(function(r) {
-            if (!r[0] || typeof r[0].connected !== 'boolean' || !r[3] || !Array.isArray(r[3].interface)) throw Error('状态读取不完整');
-            return {native:r[1], traffic:r[2], manager:r[0], sessionData:sessionFromInterfaces(interfaceFromDump(r[3], r[0].interface || 'MT5700M'), interfaceFromDump(r[3], r[0].interface6 || 'MT5700Mv6'))};
+    // Keep fast local RPCs in a separate batch from the potentially cold AT snapshot.
+    fetchStatus: function(preview, active) {
+        return Promise.all([callManagerStatus(), callTraffic(), callInterfaceDump()]).then(function(r) {
+            if (!r[0] || typeof r[0].connected !== 'boolean' || !r[1] || !Array.isArray(r[1].interfaces) || !r[2] || !Array.isArray(r[2].interface)) throw Error('状态读取不完整');
+            var data = {traffic:r[1], manager:r[0], sessionData:sessionFromInterfaces(interfaceFromDump(r[2], r[0].interface || 'MT5700M'), interfaceFromDump(r[2], r[0].interface6 || 'MT5700Mv6'))};
+            if (active && !active()) return null;
+            if (preview) preview(data);
+            return ux.read(['status']).then(function(native) {
+                data.native = native;
+                return data;
+            });
         });
+    },
+    renderLocalPreview: function(data) {
+        return E('div', {'class':'mt5700m-page mt-ui-page'}, [this.styleNode(), controls.styleNode(),
+            this.addressCard(data.sessionData), this.trafficPanel(data.traffic, data.manager.network || '')]);
     },
     load: function() { return Promise.resolve(null); },
     signalCountdownEnabled: function() {
@@ -155,9 +166,15 @@ return view.extend({
         var ready=false, busy=false, stamp=0;
         function snapshot() {
             if(busy)return;busy=true;
-            var task=ready?ux.read(['status']).then(function(native){return {native:native,manager:self.manager||{}};}):self.fetchStatus();
+            var task=ready?ux.read(['status']).then(function(native){return {native:native,manager:self.manager||{}};}):self.fetchStatus(function(data) {
+                self.manager=data.manager;
+                content.replaceChildren(self.renderLocalPreview(data));
+                notice.hidden=false;
+                notice.className='mt-loading';
+                notice.textContent='接口与流量已显示，正在读取模组详情…';
+            },function(){return root.isConnected;});
             return task.then(function(data){
-                if(!root.isConnected)return;
+                if(!root.isConnected || !data)return;
                 if(!data.native || !data.native.stdout)throw Error('Empty snapshot');
                 var parsed=self.parseStatus(data);stamp=Number(parsed.snapshot_at)||0;
                 if(!ready){
@@ -245,7 +262,8 @@ return view.extend({
                 radio: parts[0],
                 band: parts[1], frequency: parts[2], dlFrequency:parts[3], ulChannel:parts[5], ulFrequency:parts[6],
                 dlBandwidth: parts[4],
-                ulBandwidth: parts[7]
+                ulBandwidth: parts[7],
+                ulValid: data['carrier_' + i + '_ul_valid']
             });
         }
         return {
@@ -340,7 +358,7 @@ return view.extend({
             'class': 'mt5700m-band-list'
         }, info.carriers.length ? E('span', {'class':'mt5700m-band'}, info.carriers.map(function(c){return c.band||'--';}).join(' + ')) : E('span', {'class':'mt5700m-focus-desc'}, _('Current carrier information is unavailable.'))), E('div', {'class':'mt5700m-carrier-stats'}, [E('div', {'class':'mt5700m-mini'}, [E('span', {}, _('Downlink bandwidth')), E('strong', {}, info.dlBandwidth ? info.dlBandwidth + ' MHz' : '--')]), E('div', {
             'class': 'mt5700m-mini'
-        }, [E('span', {}, _('Uplink bandwidth')), E('strong', {}, info.ulBandwidth ? info.ulBandwidth + ' MHz' : '--')])]), E('details',{'class':'mt-carrier-detail'},[E('summary',{},'各载波详情'),E('div',{},info.carriers.map(function(c,i){return E('div',{},'载波 '+(i+1)+' · '+c.band+' · '+c.radio+' · '+c.frequency+' / '+c.dlFrequency+' MHz · 上行 '+c.ulChannel+' / '+c.ulFrequency+' MHz · 下行 '+(c.dlBandwidth||'--')+' MHz / 上行 '+(c.ulBandwidth||'--')+' MHz');}))]), E('a', {
+        }, [E('span', {}, _('Uplink bandwidth')), E('strong', {}, info.ulBandwidth ? info.ulBandwidth + ' MHz' : '--')])]), E('details',{'class':'mt-carrier-detail'},[E('summary',{},'各载波详情'),E('div',{},info.carriers.map(function(c,i){return E('div',{},'载波 '+(i+1)+' · '+c.band+' · '+c.radio+' · '+c.frequency+' / '+c.dlFrequency+' MHz · 上行 '+c.ulChannel+' / '+c.ulFrequency+' MHz · 下行 '+(c.dlBandwidth||'--')+' MHz / 上行 '+(c.ulValid === '0' ? _('No valid uplink information') : (c.ulBandwidth||'--')+' MHz'));}))]), E('a', {
             'class': 'mt5700m-card-link',
             'href': L.url('admin/modem/mt5700m/network')
         }, _('View radio and cell details'))]);

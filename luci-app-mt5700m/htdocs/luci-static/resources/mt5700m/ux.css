@@ -109,3 +109,10 @@
  .mt-ui-page .mt-traffic-day {grid-template-columns:48px minmax(0,1fr) 85px;gap:6px}
  .mt-ui-page .mt5700m-hero-side {flex-wrap:wrap}
 }
+
+/* Conversation buttons contain two text rows, independent of theme button heights. */
+.mt-sms.mt-ui-page .mt-sms-sidebar button.mt-sms-contact {display:block;position:relative;box-sizing:border-box;width:100%;height:auto;min-height:0;max-height:none;margin:0;padding:12px 16px;line-height:1.6;white-space:normal;text-align:left;overflow:hidden}
+.mt-sms.mt-ui-page .mt-sms-contact-top {display:flex;align-items:baseline;gap:8px;min-width:0;line-height:inherit}
+.mt-sms.mt-ui-page .mt-sms-contact-number {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-sms.mt-ui-page .mt-sms-contact-date {flex:0 0 auto;white-space:nowrap}
+.mt-sms.mt-ui-page .mt-sms-contact-preview {display:block;position:static;margin:5px 0 0;line-height:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
