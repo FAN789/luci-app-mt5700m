@@ -28,6 +28,17 @@ function usbLinkLabel(data) {
     return speed >= 1000 ? (speed / 1000) + ' Gbps' : speed + ' Mbps';
 }
 
+function networkModeLabel(raw, data) {
+    if (String(data.dc_active) === '1' && /^EN-DC(?: \+ CA)?$/.test(data.ca_mode || '')) return '5G NSA';
+    return raw === 'NR-5GC' ? '5G SA' : raw;
+}
+
+function signalRadioLabel(raw) {
+    var labels = {NR:'5G (NR)', LTE:'4G (LTE)', WCDMA:'3G (WCDMA)', UMTS:'3G (UMTS)', GSM:'2G (GSM)'};
+    var key = String(raw || '').trim().toUpperCase();
+    return Object.prototype.hasOwnProperty.call(labels, key) ? labels[key] : raw;
+}
+
 function firstInterfaceAddress(status, family) {
     var list = status && status[family + '-address'];
     return Array.isArray(list) && list[0] && list[0].address || '';
@@ -54,8 +65,13 @@ function interfaceFromDump(dump, name) {
     })[0] || {};
 }
 
+function trafficBytes(value) {
+    var number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
 function trafficTotal(item) {
-    return (Number(item && item.rx) || 0) + (Number(item && item.tx) || 0);
+    return trafficBytes(item && item.rx) + trafficBytes(item && item.tx);
 }
 
 function trafficDateKey(item, monthly) {
@@ -93,17 +109,21 @@ return view.extend({
         });
     },
     load: function() { return Promise.resolve(null); },
+    signalCountdownEnabled: function() {
+        try { return window.localStorage.getItem('mt5700m.overview.countdown') !== 'off'; }
+        catch (error) { return true; }
+    },
     startSignalUpdates: function(root) {
         var self=this, stamp=0, failed=false;
         ux.signal(root, function(data) {
             var card=root.querySelector('[data-mt-signal]'); if (!card) return;
             stamp=Number(data.sampled_at); failed=false;
-            data.signalUpdated='信号 · '+ux.ageText(stamp);
+            data.signalUpdated=_('Updated %s').format(ux.ageText(stamp));
             card.replaceWith(self.signalCard(data));
         }, function() { failed=true; }, function(remaining) {
             var label=root.querySelector('[data-signal-time]'), badge=root.querySelector('[data-signal-countdown]');
             if (badge) badge.textContent=remaining===null?'已暂停':remaining===0?'刷新中':remaining+' 秒后刷新';
-            if(label) label.textContent=stamp?(failed?'更新暂缓 · ':'信号 · ')+ux.ageText(stamp)+(ux.age(stamp)>15?' · 数值可能过期':''):'等待后台信号采样…';
+            if(label) label.textContent=stamp?(failed?'更新暂缓 · '+ux.ageText(stamp):_('Updated %s').format(ux.ageText(stamp)))+(ux.age(stamp)>15?' · 数值可能过期':''):'等待后台信号采样…';
         });
     },
     startLocalUpdates: function(root) {
@@ -153,7 +173,7 @@ return view.extend({
                     var usbLink = root.querySelector('[data-mt-usb-link]');
                     if (usbLink) usbLink.textContent = usbLinkLabel(parsed);
                     var operator=root.querySelector('[data-mt-operator]');if(operator)operator.textContent=parsed.operator||'--';
-                    var mode=root.querySelector('[data-mt-mode]');if(mode)mode.textContent=parsed.sysmode_detail||parsed.sysmode||'--';
+                    var mode=root.querySelector('[data-mt-mode]');if(mode){var raw=parsed.sysmode_detail||parsed.sysmode||'--';mode.textContent=networkModeLabel(raw,parsed);mode.title=raw;}
                 }
                 notice.hidden=true;
             }).catch(function(){
@@ -161,8 +181,8 @@ return view.extend({
                 notice.replaceChildren(E('span',{},ready?'概览更新失败，保留上次快照。':'暂时无法读取，不能据此判断模组断网。'),E('button',{'class':'btn',click:snapshot},'重试'));
             }).then(function(){busy=false;});
         }
-        this._refreshSnapshot=snapshot;
-        ux.watch(root,60,snapshot,function(){var label=root.querySelector('[data-overview-age]');if(label)label.textContent='载波快照 · '+ux.ageText(stamp);});
+        this._overviewRoot=root;this._refreshSnapshot=snapshot;
+        ux.watch(root,60,snapshot,function(){var label=root.querySelector('[data-overview-age]');if(label)label.textContent=stamp?_('Updated %s').format(ux.ageText(stamp)):_('Waiting for carrier snapshot…');});
         return root;
     },
     parseStatus: function(res) {
@@ -223,7 +243,7 @@ return view.extend({
             if (parts.length < 8) continue;
             carriers.push({
                 radio: parts[0],
-                band: parts[1], frequency: parts[2],
+                band: parts[1], frequency: parts[2], dlFrequency:parts[3], ulChannel:parts[5], ulFrequency:parts[6],
                 dlBandwidth: parts[4],
                 ulBandwidth: parts[7]
             });
@@ -236,7 +256,8 @@ return view.extend({
             count: carriers.length,
             dlBandwidth: data.ca_dl_bandwidth || '',
             ulBandwidth: data.ca_ul_bandwidth || '',
-            carriers: carriers
+            carriers: carriers,
+            snapshotAt: Number(data.snapshot_at) || 0
         };
     },
     signalCard: function(data) {
@@ -253,12 +274,15 @@ return view.extend({
                 'style': 'height:%dpx'.format(8 + i * 3)
             }));
 
+        var self = this;
         function countdown() {
-            return E('small', {
+            var node = E('small', {
                 'data-signal-countdown': '',
                 'class': 'mt-signal-countdown',
                 'title': '这些信号指标使用同一次查询，同步刷新'
             }, '等待刷新');
+            node.hidden = !self.signalCountdownEnabled();
+            return node;
         }
         return E('section', {
             'class': 'mt5700m-focus mt-ui-card',
@@ -285,13 +309,23 @@ return view.extend({
             'class': 'mt5700m-mini'
         }, [E('span', {}, 'SINR'), E('strong', {}, isNaN(sinr) ? '--' : data.sinr + ' dB')]), E('div', {
             'class': 'mt5700m-mini'
-        }, [E('span', {}, _('Network Mode')), E('strong', {}, data.sysmode || '--')])])]);
+        }, [E('span', {}, _('Signal radio')), E('strong', {title:data.sysmode || '--'}, signalRadioLabel(data.sysmode || '--'))])])]);
     },
     carrierCard: function(info) {
         var active = info.active || info.dual;
-        var grouped={};info.carriers.forEach(function(c){var k=c.radio+' · '+c.band;grouped[k]=(grouped[k]||0)+1;});
-        var badge = !info.available ? _('Unavailable') : info.active ? _('Aggregating') : info.dual ? _('Dual connectivity') : _('Single carrier');
-        var headline = !info.available ? '--' : info.active ? info.count + 'CA' : info.dual ? (info.mode || 'EN-DC') : (info.carriers[0] ? info.carriers[0].band : _('Single carrier'));
+        var badge = _('Unavailable'), headline = '--';
+        if (info.available) {
+            if (info.dual) {
+                headline = info.active ? 'EN-DC + CA' : 'EN-DC';
+                badge = info.active ? _('Dual connectivity and aggregation') : _('Dual connectivity');
+            } else if (info.active) {
+                headline = info.count + 'CA'; badge = _('Aggregating');
+            } else if (info.count === 1) {
+                headline = _('Single carrier'); badge = _('Not aggregating');
+            } else {
+                badge = _('Unknown');
+            }
+        }
         return E('section', {
             'class': 'mt5700m-focus mt-ui-card', 'data-mt-carrier':''
         }, [E('div', {
@@ -300,17 +334,13 @@ return view.extend({
             'class': 'mt5700m-focus-title'
         }, _('Carrier status'))]), E('span', {
             'class': 'mt5700m-badge' + (active ? ' active' : '')
-        }, badge)]), E('div', {
+        }, badge)]), E('div', {'class':'mt-data-age','data-overview-age':''}, info.snapshotAt ? _('Updated %s').format(ux.ageText(info.snapshotAt)) : _('Waiting for carrier snapshot…')), E('div', {
             'class': 'mt5700m-carrier-main'
-        }, [E('strong', {}, headline), E('span', {}, info.mode || _('Mobile network'))]), E('div', {
+        }, [E('strong', {}, headline), info.dual || info.active ? null : E('span', {}, info.mode || _('Mobile network'))]), E('div', {
             'class': 'mt5700m-band-list'
-        }, info.carriers.length ? Object.keys(grouped).map(function(key) { return E('span', {'class':'mt5700m-band'}, key+(grouped[key]>1?' ×'+grouped[key]:'')); }) : E('span', {'class':'mt5700m-focus-desc'}, _('Current carrier information is unavailable.'))), E('div', {
-            'class': 'mt5700m-carrier-stats'
-        }, [E('div', {
+        }, info.carriers.length ? E('span', {'class':'mt5700m-band'}, info.carriers.map(function(c){return c.band||'--';}).join(' + ')) : E('span', {'class':'mt5700m-focus-desc'}, _('Current carrier information is unavailable.'))), E('div', {'class':'mt5700m-carrier-stats'}, [E('div', {'class':'mt5700m-mini'}, [E('span', {}, _('Downlink bandwidth')), E('strong', {}, info.dlBandwidth ? info.dlBandwidth + ' MHz' : '--')]), E('div', {
             'class': 'mt5700m-mini'
-        }, [E('span', {}, _('Downlink bandwidth')), E('strong', {}, info.dlBandwidth ? info.dlBandwidth + ' MHz' : '--')]), E('div', {
-            'class': 'mt5700m-mini'
-        }, [E('span', {}, _('Uplink bandwidth')), E('strong', {}, info.ulBandwidth ? info.ulBandwidth + ' MHz' : '--')])]), E('details',{'class':'mt-carrier-detail'},[E('summary',{},'各载波详情'),E('div',{},info.carriers.map(function(c,i){return E('div',{},'载波 '+(i+1)+' · '+c.band+' · 下行 '+(c.dlBandwidth||'--')+' MHz / 上行 '+(c.ulBandwidth||'--')+' MHz');}))]), E('a', {
+        }, [E('span', {}, _('Uplink bandwidth')), E('strong', {}, info.ulBandwidth ? info.ulBandwidth + ' MHz' : '--')])]), E('details',{'class':'mt-carrier-detail'},[E('summary',{},'各载波详情'),E('div',{},info.carriers.map(function(c,i){return E('div',{},'载波 '+(i+1)+' · '+c.band+' · '+c.radio+' · '+c.frequency+' / '+c.dlFrequency+' MHz · 上行 '+c.ulChannel+' / '+c.ulFrequency+' MHz · 下行 '+(c.dlBandwidth||'--')+' MHz / 上行 '+(c.ulBandwidth||'--')+' MHz');}))]), E('a', {
             'class': 'mt5700m-card-link',
             'href': L.url('admin/modem/mt5700m/network')
         }, _('View radio and cell details'))]);
@@ -318,6 +348,7 @@ return view.extend({
     addressCard: function(session) {
         var active = session.ipv4Connected || session.ipv6Connected;
         var loading = session.loading === true;
+        var hideEmptyIPv6 = !loading && session.ipv4Connected && !session.ipv6Connected && !session.ipv6Expected && (!session.ipv6Address || session.ipv6Address === '--');
         return E('section', {
             'class': 'mt5700m-focus mt5700m-address-card mt-ui-card',
             'data-mt-address': ''
@@ -337,7 +368,7 @@ return view.extend({
             'class': 'mt5700m-ip-state' + (session.ipv4Connected ? ' on' : '')
         }, loading ? '读取中' : session.ipv4Connected ? _('Connected') : _('Not assigned'))]), E('div', {
             'class': 'mt5700m-ip-value'
-        }, session.ipv4Address || '--')]), E('div', {
+        }, session.ipv4Address || '--')]), hideEmptyIPv6 ? null : E('div', {
             'class': 'mt5700m-ip-row'
         }, [E('div', {
             'class': 'mt5700m-ip-head'
@@ -345,7 +376,7 @@ return view.extend({
             'class': 'mt5700m-ip-state' + (session.ipv6Connected ? ' on' : '')
         }, loading ? '读取中' : session.ipv6Connected ? _('Connected') : _('Not assigned'))]), E('div', {
             'class': 'mt5700m-ip-value'
-        }, session.ipv6Address || '--')])]), E('div', {
+        }, session.ipv6Address || '--')])].filter(Boolean)), E('div', {
             'class': 'mt5700m-ip-meta'
         }, [E('span', {}, session.capability || '--'), E('span', {}, 'MTU ' + (session.mtu || '--'))]), E('a', {
             'class': 'mt5700m-card-link',
@@ -364,31 +395,46 @@ return view.extend({
         var today = currentTraffic(days, false),
             month = currentTraffic(months, true),
             lifetime = traffic.total || {};
-        var recentDays = days.slice(-7).reverse(),
-            maximum = Math.max.apply(Math, recentDays.map(trafficTotal).concat([1]));
-        var dayRows = recentDays.length ? recentDays.map(function(item) {
-            var rx = Number(item.rx) || 0,
-                tx = Number(item.tx) || 0;
-            return E('div', {
-                'class': 'mt5700m-day'
-            }, [E('span', {
-                'class': 'mt5700m-date'
-            }, trafficDateKey(item, false).substring(5)), E('div', {
-                'class': 'mt5700m-bars'
-            }, [E('div', {
-                'class': 'mt5700m-bar'
-            }, E('i', {
-                'style': 'width:' + Math.max(1, rx / maximum * 100).toFixed(1) + '%'
-            })), E('div', {
-                'class': 'mt5700m-bar tx'
-            }, E('i', {
-                'style': 'width:' + Math.max(1, tx / maximum * 100).toFixed(1) + '%'
-            }))]), E('span', {
-                'class': 'mt5700m-values'
-            }, controls.formatBytes(trafficTotal(item)))]);
-        }) : [E('div', {
-            'class': 'mt5700m-focus-desc'
-        }, _('Statistics appear after the MT5700M data interface has carried traffic for a few minutes.'))];
+        if (!this.trafficHistory) this.trafficHistory = Object.create(null);
+        var key = iface.name || interfaceName || 'default';
+        var state = this.trafficHistory[key];
+        if (!state) state = this.trafficHistory[key] = {count:7, open:Object.create(null)};
+        var history = E('div', {'class':'mt5700m-days'});
+        function renderHistory() {
+            var visible = days.slice(-state.count).reverse();
+            var maximum = Math.max.apply(Math, visible.map(trafficTotal).concat([1]));
+            var nodes = [], group = '';
+            visible.forEach(function(item) {
+                var date = trafficDateKey(item, false), month = date.slice(0,7);
+                if (month !== group) {
+                    group = month; nodes.push(E('h4', {'class':'mt-traffic-month'}, month));
+                }
+                var rx = trafficBytes(item.rx), tx = trafficBytes(item.tx);
+                var detailText = date + ' · ' + _('Download %s').format(controls.formatBytes(rx)) + ' · ' +
+                    _('Upload %s').format(controls.formatBytes(tx)) + ' · ' + _('Total %s').format(controls.formatBytes(rx+tx));
+                var row = E('details', {'class':'mt-traffic-record',title:detailText,toggle:function(){state.open[date]=row.open;}}, [
+                    E('summary', {'class':'mt-traffic-day'}, [E('span', {}, date.slice(5)),
+                        E('span', {'class':'mt-traffic-stack','aria-hidden':'true'}, [
+                            E('i', {'class':'rx',style:'width:'+(rx/maximum*100)+'%'}),
+                            E('i', {'class':'tx',style:'width:'+(tx/maximum*100)+'%'})]),
+                        E('span', {'class':'mt-traffic-total'}, controls.formatBytes(rx+tx))]),
+                    E('div', {'class':'mt-traffic-detail'}, detailText)]);
+                row.open = !!state.open[date];
+                nodes.push(row);
+            });
+            if (!days.length) nodes.push(E('p', {}, _('No traffic history yet.')));
+            var actions = [];
+            if (days.length > state.count) actions.push(E('button', {type:'button','class':'btn',click:function(){
+                state.count += 30; renderHistory();
+            }}, _('Earlier records (%s days remaining)').format(days.length-visible.length)));
+            if (state.count > 7 && days.length > 7) actions.push(E('button', {type:'button','class':'btn',click:function(){
+                state.count=7; renderHistory();
+            }}, _('Show latest 7 days')));
+            if (actions.length) nodes.push(E('div', {'class':'mt-traffic-actions'}, actions));
+            if (days.length) nodes.push(E('p', {'class':'mt-traffic-earliest'}, _('Earliest record: %s').format(trafficDateKey(days[0],false))));
+            history.replaceChildren(...nodes);
+        }
+        renderHistory();
 
         function stat(label, item) {
             return E('div', {
@@ -399,7 +445,7 @@ return view.extend({
                 'class': 'mt5700m-traffic-value'
             }, controls.formatBytes(trafficTotal(item))), E('div', {
                 'class': 'mt5700m-traffic-split'
-            }, [E('span', {}, _('Download %s').format(controls.formatBytes(item.rx))), E('span', {}, _('Upload %s').format(controls.formatBytes(item.tx)))])]);
+            }, [E('span', {}, _('Download %s').format(controls.formatBytes(trafficBytes(item.rx)))), E('span', {}, _('Upload %s').format(controls.formatBytes(trafficBytes(item.tx))))])]);
         }
         return E('section', {
             'class': 'mt5700m-traffic mt-ui-card'
@@ -416,9 +462,7 @@ return view.extend({
             'class': 'mt5700m-legend'
         }, [E('span', {}, _('Download')), E('span', {}, _('Upload'))])])]), E('div', {
             'class': 'mt5700m-traffic-layout'
-        }, [stat(_('Today'), today), stat(_('This month'), month), stat(_('All-time total'), lifetime), E('div', {
-            'class': 'mt5700m-days'
-        }, dayRows)])]);
+        }, [stat(_('Today'), today), stat(_('This month'), month), stat(_('All-time total'), lifetime), history])]);
     },
     shortcut: function(title, description, path) {
         return E('a', {
@@ -440,6 +484,12 @@ return view.extend({
             dump: _('Dump mode'),
             unknown: _('Unknown USB mode')
         };
+        var countdown = E('input', {type:'checkbox', change:function() {
+            try { window.localStorage.setItem('mt5700m.overview.countdown', this.checked ? 'on' : 'off'); } catch (error) {}
+            var node=self._overviewRoot && self._overviewRoot.querySelector('[data-signal-countdown]');
+            if(node)node.hidden=!this.checked;
+        }});
+        countdown.checked=this.signalCountdownEnabled();
         var abnormalUsb = data.usb_state === 'upgrade' || data.usb_state === 'dump' || data.usb_state === 'unknown';
         return E('div', {
             'class': 'mt5700m-page mt-ui-page'
@@ -461,13 +511,13 @@ return view.extend({
             'class': 'mt5700m-summary'
         }, !reachable ? _('The modem did not respond. Check the module connection.') : connected ? _('Mobile network is connected and ready.') : _('The module is online, but mobile data is not connected.')), E('div', {
             'class': 'mt5700m-hero-meta'
-        }, [E('span', {}, [_('Operator'), E('strong', {'data-mt-operator':''}, operator || '--')]), E('span', {}, [_('Network Mode'), E('strong', {'data-mt-mode':''}, data.sysmode_detail || data.sysmode || '--')]), E('span', {}, [_('Network interface'), E('strong', {}, data.network_interface || '--')]),
+        }, [E('span', {}, [_('Operator'), E('strong', {'data-mt-operator':''}, operator || '--')]), E('span', {}, [_('Network topology'), E('strong', {'data-mt-mode':'',title:data.sysmode_detail || data.sysmode || '--'}, networkModeLabel(data.sysmode_detail || data.sysmode || '--',data))]), E('span', {}, [_('Network interface'), E('strong', {}, data.network_interface || '--')]),
             E('span', { title: _('Negotiated USB link speed') }, ['USB ', E('strong', {'data-mt-usb-link':''}, usbLinkLabel(data))])]), E('div', {
             'class': 'mt5700m-hero-foot'
         }, [E('span', {
             'class': res.manager.internet_verified === true ? 'mt5700m-hero-health' : '',
             'data-mt-health-summary': ''
-        }, res.manager.internet_verified === true ? '蜂窝探测正常' : ''), E('span', {'data-overview-age':''}, '载波快照 · '+ux.ageText(data.snapshot_at))].filter(Boolean))].filter(Boolean)), E('div', {
+        }, res.manager.internet_verified === true ? '蜂窝探测正常' : '')].filter(Boolean))].filter(Boolean)), E('div', {
             'class': 'mt5700m-hero-side'
         }, [E('div', {
             'class': 'mt5700m-status' + (connected ? ' online' : ''),
@@ -481,7 +531,7 @@ return view.extend({
             'click': function() {
                 self._refreshSnapshot();
             }
-        }, _('Refresh'))])]), E('div', {
+        }, _('Refresh')), E('label', {'class':'mt-countdown-option'}, [countdown, _('Show refresh countdown')])])]), E('div', {
             'class': 'mt5700m-focus-grid'
         }, [this.signalCard(data), this.carrierCard(carrierInfo), this.addressCard(session)]), this.trafficPanel(res.traffic || {}, data.network_interface || ''), E('div', {
             'class': 'mt5700m-shortcuts'

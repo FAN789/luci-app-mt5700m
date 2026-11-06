@@ -16,7 +16,7 @@ function themeFile(name, expected) {
 }
 const theme = themeFile('cascade.css', 'f428caeef6ae87f621eae98704814504854836b0adfcca11f40c964bf85fb65c');
 const dark = themeFile('dark.css', 'f27c8eff398b68a60b5048cb619fecf3621a48c9081e024363d4d5d1ce991a3c');
-const names = ['status', 'connection', 'connection-expanded', 'network', 'network-expanded',
+const names = ['history', 'status', 'connection', 'connection-expanded', 'network', 'network-expanded',
     'terminal', 'settings', 'network-refreshed', 'sms', 'sms-settings', 'system', 'system-expanded', 'advanced', 'advanced-expanded'];
 
 (async () => {
@@ -56,7 +56,7 @@ const names = ['status', 'connection', 'connection-expanded', 'network', 'networ
                             }
                         }
                         const exact = document.querySelector('[data-mt-signal]')
-                            ? ['.mt5700m-hero-foot', '.mt5700m-hero-health', '[data-overview-age]', 'a.mt5700m-card-link']
+                            ? ['.mt5700m-hero-health', '[data-overview-age]', 'a.mt5700m-card-link']
                             : document.querySelector('[data-net-signal-time]') ? ['[data-net-signal-time]'] : [];
                         for (const selector of exact) {
                             const elements = document.querySelectorAll(selector);

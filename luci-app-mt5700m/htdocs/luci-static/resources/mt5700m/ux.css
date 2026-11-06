@@ -84,3 +84,28 @@
  .mt-ui-page .mtconn-config .cbi-value-title {font-size:14px;line-height:1.6;padding-top:calc((var(--mtconn-control-height) - 1.6em)/2);padding-bottom:0;margin-top:0}
  .mt-ui-page .mtconn-config .cbi-value-field :is(input:not([type=checkbox]):not([type=radio]),select,.cbi-dropdown) {min-height:var(--mtconn-control-height);box-sizing:border-box}
 }
+
+.mt-ui-page .mt-countdown-option {display:inline-flex;align-items:center;gap:6px;font-size:14px}
+.mt-ui-page .mt-countdown-option input {appearance:auto;width:16px;height:16px;margin:0}
+.mt-ui-page .mt5700m-band {max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.mt-ui-page .mt5700m-traffic-layout {grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.mt-ui-page .mt5700m-traffic-stat {align-self:start}
+.mt-ui-page .mt5700m-traffic-value {font-size:27px}
+.mt-ui-page .mt5700m-days {grid-column:1/-1;padding:0;display:block}
+.mt-ui-page .mt-traffic-month {font-size:14px;margin:14px 0 6px}
+.mt-ui-page .mt-traffic-day {display:grid;grid-template-columns:55px minmax(0,1fr) 105px;gap:10px;align-items:center;cursor:pointer;padding:8px 0;list-style:none;font-size:14px}
+.mt-ui-page .mt-traffic-day::-webkit-details-marker {display:none}
+.mt-ui-page .mt-traffic-stack {display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--background-color-low,#edf0f4)}
+.mt-ui-page .mt-traffic-stack i {display:block;flex-shrink:0;height:100%;min-width:0}
+.mt-ui-page .mt-traffic-stack .rx {background:#337de8}
+.mt-ui-page .mt-traffic-stack .tx {background:#16a085}
+.mt-ui-page .mt-traffic-total {text-align:right;font-variant-numeric:tabular-nums}
+.mt-ui-page .mt-traffic-detail {padding:8px 0;font-size:14px;overflow-wrap:anywhere}
+.mt-ui-page .mt-traffic-actions {display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.mt-ui-page .mt-traffic-earliest {font-size:14px;margin:12px 0 0}
+@media(max-width:650px){
+ .mt-ui-page .mt5700m-traffic-layout {grid-template-columns:1fr}
+ .mt-ui-page .mt5700m-traffic-stat:nth-child(3) {grid-column:auto}
+ .mt-ui-page .mt-traffic-day {grid-template-columns:48px minmax(0,1fr) 85px;gap:6px}
+ .mt-ui-page .mt5700m-hero-side {flex-wrap:wrap}
+}

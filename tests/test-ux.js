@@ -88,13 +88,59 @@ function snapshot(name, root) {
  const signalActions=root.querySelector('[data-signal-countdown]').parentNode;
  assert.equal(signalActions.className,'mt-signal-actions');
  assert(signalActions.children.some(n=>n.className.includes('mt5700m-badge')));
-assert(root.textContent.includes('n78 ×2'));assert(root.textContent.includes('10.0.0.2'));
+assert(root.textContent.includes('n78 + n78'));assert(root.textContent.includes('10.0.0.2'));
  assert(root.textContent.includes('2CA'));
  assert(root.querySelector('[data-mt-usb-link]').textContent.includes('480 Mbps'));
  usbSpeed='5000';
  rpcFail=true;await advance(4000);assert(root.textContent.includes('10.0.0.2'));assert(root.textContent.includes('状态待确认'));rpcFail=false;
  const initial=calls.filter(c=>c[0]==='status').length;await advance(61000);assert(calls.filter(c=>c[0]==='status').length>initial);
  assert.equal(root.querySelector('[data-mt-usb-link]').textContent,'5 Gbps');snapshot('status',root);root.remove();
+
+ // Carrier semantics, address transitions, history pagination and timing preference.
+ const sample={carrier_count:'2',ca_active:'1',dc_active:'0',ca_mode:'NR-CA',snapshot_at:String(now/1000),
+  carrier_1:'NR|n78|1|3500|100|1|3500|100',carrier_2:'NR|n78|2|3600|100|2|3600|100'};
+ assert(overview.carrierCard(overview.carrierInfo(sample)).textContent.includes('2CA'));
+ assert(!overview.carrierCard(overview.carrierInfo(sample)).textContent.includes('NR-CA'));
+ assert(overview.carrierCard(overview.carrierInfo({...sample,dc_active:'1',ca_mode:'EN-DC + CA'})).textContent.includes('EN-DC + CA'));
+ assert(overview.carrierCard(overview.carrierInfo({...sample,carrier_count:'1',ca_active:'0'})).textContent.includes('Single carrier'));
+ assert(!overview.carrierCard(overview.carrierInfo({...sample,ca_active:'0'})).textContent.includes('Single carrier'));
+ assert(overview.carrierCard(overview.carrierInfo({})).textContent.includes('Waiting for carrier snapshot'));
+ for(const session of [
+  {ipv4Connected:true,expected:1},
+  {ipv4Connected:true,ipv6Connected:true,ipv6Address:'2001:db8::1',expected:2},
+  {ipv4Connected:true,ipv6Address:'2001:db8::1',expected:2},
+  {ipv4Connected:true,loading:true,expected:2},
+  {ipv4Connected:true,ipv6Expected:true,expected:2},
+  {expected:2}]){
+  assert.equal(overview.addressCard(session).querySelectorAll('.mt5700m-ip-row').length,session.expected);
+ }
+ storage['mt5700m.overview.countdown']='off';
+ assert(overview.signalCard({rsrp:'-90'}).querySelector('[data-signal-countdown]').hidden);
+ storage['mt5700m.overview.countdown']='on';
+ assert(!overview.signalCard({rsrp:'-90'}).querySelector('[data-signal-countdown]').hidden);
+
+ for(const [raw,dc,mode,expected] of [['NR-5GC','0','NR','5G SA'],['NR-5GC','1','EN-DC','5G NSA'],['LTE','0','LTE','LTE'],['NR','0','NR','NR']]){
+  const rendered=overview.renderStatus({native:{stdout:'sysmode=NR\nnetwork_mode='+raw+'\ndc_active='+dc+'\nca_mode='+mode+'\n'},manager:{connected:true},sessionData:{},traffic:{interfaces:[]}});
+  assert.equal(rendered.querySelector('[data-mt-mode]').textContent,expected);
+ }
+ assert(overview.signalCard({sysmode:'LTE'}).textContent.includes('4G (LTE)'));
+ const historyDays=Array.from({length:70},(_,i)=>{const d=new Date(Date.UTC(2025,0,i+1));return {date:{year:d.getUTCFullYear(),month:d.getUTCMonth()+1,day:d.getUTCDate()},rx:i===0?0:i*1024,tx:0};});
+ const trafficReport={interfaces:[{name:'history-fixture',traffic:{day:historyDays,total:{rx:100,tx:0}}}]};
+ let historyPanel=overview.trafficPanel(trafficReport,'history-fixture');
+ assert.equal(historyPanel.querySelectorAll('.mt-traffic-record').length,7);
+ historyPanel.querySelectorAll('button')[0].click();
+ assert.equal(historyPanel.querySelectorAll('.mt-traffic-record').length,37);
+ historyPanel=overview.trafficPanel(trafficReport,'history-fixture');
+ assert.equal(historyPanel.querySelectorAll('.mt-traffic-record').length,37);
+ historyPanel.querySelectorAll('button')[0].click();
+ historyPanel.querySelectorAll('button')[0].click();
+ assert.equal(historyPanel.querySelectorAll('.mt-traffic-record').length,70);
+ assert(historyPanel.querySelectorAll('i').some(n=>n.attrs.style==='width:0%'));
+ assert(!historyPanel.querySelectorAll('i').some(n=>n.attrs.style.includes('NaN')));
+ historyPanel.querySelectorAll('button')[0].click();
+ assert.equal(historyPanel.querySelectorAll('.mt-traffic-record').length,7);
+ assert.equal(overview.trafficPanel({interfaces:[]},'empty').querySelectorAll('button').length,0);
+ if(process.env.MT5700M_DOM_DIR)snapshot('history',new Element('div',{'class':'mt-ui-page'},[ctx.ux.style(),overview.trafficPanel(trafficReport,'history-fixture')]));
  // Deferred radio/connection pages must not query advanced controls until expanded.
  for(const name of ['network','connection','system','advanced']){
   responses.network={code:0,stdout:'===== Serving cell: AT^MONSC =====\n^MONSC: NR,460,1,1,1,1,1,1,-90,-5,12\n'};

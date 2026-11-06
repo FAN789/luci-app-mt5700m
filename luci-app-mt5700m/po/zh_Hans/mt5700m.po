@@ -2620,3 +2620,39 @@ msgstr "模组 USB 实际协商速率"
 
 msgid "480 Mbps (USB 2.0 High-Speed)"
 msgstr "480 Mbps（USB 2.0 高速）"
+
+msgid "Updated %s"
+msgstr "更新于 %s"
+
+msgid "Waiting for carrier snapshot…"
+msgstr "等待载波快照…"
+
+msgid "Network topology"
+msgstr "组网模式"
+
+msgid "Signal radio"
+msgstr "信号制式"
+
+msgid "Dual connectivity and aggregation"
+msgstr "双连接＋聚合"
+
+msgid "Not aggregating"
+msgstr "未聚合"
+
+msgid "Show refresh countdown"
+msgstr "显示刷新倒计时"
+
+msgid "No traffic history yet."
+msgstr "暂无流量历史。"
+
+msgid "Total %s"
+msgstr "合计 %s"
+
+msgid "Earlier records (%s days remaining)"
+msgstr "查看更早记录（还有 %s 天）"
+
+msgid "Show latest 7 days"
+msgstr "收起为最近 7 条"
+
+msgid "Earliest record: %s"
+msgstr "最早可用记录：%s"
