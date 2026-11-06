@@ -354,7 +354,7 @@ return view.extend({
             'class': 'mt5700m-badge' + (active ? ' active' : '')
         }, badge)]), E('div', {'class':'mt-data-age','data-overview-age':''}, info.snapshotAt ? _('Updated %s').format(ux.ageText(info.snapshotAt)) : _('Waiting for carrier snapshot…')), E('div', {
             'class': 'mt5700m-carrier-main'
-        }, [E('strong', {}, headline), info.dual || info.active ? null : E('span', {}, info.mode || _('Mobile network'))]), E('div', {
+        }, [E('strong', {}, headline), info.dual || info.active ? null : E('span', {}, info.mode || _('Mobile network'))].filter(function(node) { return node != null; })), E('div', {
             'class': 'mt5700m-band-list'
         }, info.carriers.length ? E('span', {'class':'mt5700m-band'}, info.carriers.map(function(c){return c.band||'--';}).join(' + ')) : E('span', {'class':'mt5700m-focus-desc'}, _('Current carrier information is unavailable.'))), E('div', {'class':'mt5700m-carrier-stats'}, [E('div', {'class':'mt5700m-mini'}, [E('span', {}, _('Downlink bandwidth')), E('strong', {}, info.dlBandwidth ? info.dlBandwidth + ' MHz' : '--')]), E('div', {
             'class': 'mt5700m-mini'

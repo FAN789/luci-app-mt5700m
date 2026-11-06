@@ -4,11 +4,11 @@ class Element {
  constructor(tag,attrs={},children=[]){this.tagName=tag;this.attrs=attrs;this.children=[];this.parentNode=null;this.value=attrs.value||'';this.disabled=!!attrs.disabled;this.hidden=false;this.open=false;this.style={};this.dataset={};this.scrollTop=0;this.scrollHeight=500;this.listeners={};this._text='';this.className=attrs.class||'';
  Object.keys(attrs).forEach(k=>{if(k.startsWith('data-'))this.dataset[k.slice(5).replace(/-([a-z])/g,(_,c)=>c.toUpperCase())]=attrs[k];if(typeof attrs[k]==='function')this.listeners[k]=attrs[k];});
  this.classList={toggle:(c,on)=>{const a=new Set(this.className.split(' '));if(on)a.add(c);else a.delete(c);this.className=[...a].join(' ');},add:c=>this.classList.toggle(c,true)};
- this.replaceChildren(...(Array.isArray(children)?children:[children]));}
+ this.replaceChildren(...(Array.isArray(children)?children:children==null?[]:[children]));}
  get isConnected(){return this===document.body||!!this.parentNode?.isConnected;}
  get textContent(){return this._text+this.children.map(x=>x.textContent).join('');}
  set textContent(v){this._text=String(v);this.children.forEach(x=>x.parentNode=null);this.children=[];}
- appendChild(node){if(node===null||node===undefined)return;if(!(node instanceof Element)){const n=new Element('#text');n._text=String(node);node=n;}node.parentNode=this;this.children.push(node);return node;}
+ appendChild(node){if(!(node instanceof Element)){const n=new Element('#text');n._text=String(node);node=n;}node.parentNode=this;this.children.push(node);return node;}
  replaceChildren(...nodes){this._text='';this.children.forEach(x=>x.parentNode=null);this.children=[];nodes.flat().forEach(n=>this.appendChild(n));}
  replaceWith(n){const p=this.parentNode;if(!p)return;let i=p.children.indexOf(this);p.children[i]=n;n.parentNode=p;this.parentNode=null;}
  remove(){if(this.parentNode){this.parentNode.children=this.parentNode.children.filter(x=>x!==this);this.parentNode=null;}}
@@ -43,6 +43,8 @@ ctx.ux=load('mt5700m/ux');ctx.controls=load('mt5700m/controls');
 function mount(n){document.body.replaceChildren(n);return n;}
 // Optional snapshots let browser tests inspect the actual view output below.
 function snapshot(name, root) {
+ const invalidText=node=>node.tagName==='#text'?/(null|undefined)/.test(node.textContent):!['style','script'].includes(node.tagName)&&node.children.some(invalidText);
+ assert(!invalidText(root),'Unexpected null/undefined text in '+name);
  const directory = process.env.MT5700M_DOM_DIR;
  if (!directory) return;
  function escape(value) {
@@ -67,6 +69,15 @@ function snapshot(name, root) {
  fs.writeFileSync(path.join(directory, name + '.html'), serialize(root));
 }
 (async()=>{
+ // Match LuCI dom.append(): null/undefined array entries become text; direct null does not.
+ assert.equal(ctx.E('div',{},[null,undefined]).textContent,'nullundefined');
+ assert.equal(ctx.E('div',{},null).textContent,'');
+ for(const restart of [false,true]){
+  ctx.controls.confirmRun('Confirmation','Read before applying',['test'],restart);
+  const dialog=new Element('div',{'class':'mt-ui-page'},modal.nodes);
+  assert(!dialog.textContent.includes('null'),'confirmation must omit absent warning nodes');
+  assert.equal(dialog.textContent.includes('A module restart'),restart);
+ }
  // Cached reads coalesce and failures can be retried.
  responses.signal=()=>({code:0,stdout:`sysmode=NR\nrsrp=-90\nrsrq=-5\nsinr=12\nsampled_at=${now/1000}\n`});
  calls=[];await Promise.all([ctx.ux.read(['signal']),ctx.ux.read(['signal'])]);assert.equal(calls.length,1);
@@ -125,6 +136,12 @@ assert(root.textContent.includes('n78 + n78'));assert(root.textContent.includes(
  // Carrier semantics, address transitions, history pagination and timing preference.
  const sample={carrier_count:'2',ca_active:'1',dc_active:'0',ca_mode:'NR-CA',snapshot_at:String(now/1000),
   carrier_1:'NR|n78|1|3500|100|1|3500|100',carrier_2:'NR|n78|2|3600|100|2|3600|100'};
+ for(const count of [2,3]){
+  for(const dual of ['0','1']){
+   const card=overview.carrierCard(overview.carrierInfo({...sample,carrier_count:String(count),dc_active:dual}));
+   assert(!card.textContent.includes('null'),'CA/EN-DC must not render null');
+  }
+ }
  assert(overview.carrierCard(overview.carrierInfo(sample)).textContent.includes('2CA'));
  assert(!overview.carrierCard(overview.carrierInfo(sample)).textContent.includes('NR-CA'));
  assert(overview.carrierCard(overview.carrierInfo({...sample,dc_active:'1',ca_mode:'EN-DC + CA'})).textContent.includes('EN-DC + CA'));

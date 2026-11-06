@@ -4,8 +4,14 @@
 [![Build Release](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml/badge.svg)](https://github.com/FAN789/luci-app-mt5700m/actions/workflows/release.yml)
 
 面向鼎桥（TD Tech）MT5700M-CN 5G 模组的 OpenWrt LuCI 管理插件。
-当前版本 **v3.0.14**，应用 `3.0.14-r1`，原生传输程序 `1.0.1-r1`。
+当前版本 **v3.0.15**，应用 `3.0.15-r1`，原生传输程序 `1.0.1-r1`。
 这是插件包，不是整机固件，不包含个人网络配置、短信、SIM 数据或登录凭据。
+
+## 3.0.15 更新
+
+修复聚合载波标题（2CA/3CA/EN-DC）及无需重启的操作确认弹窗出现字面量 `null`。LuCI 的数组子节点会将空值转成文字，相关可选节点现在在传入前明确移除；不处理或删改用户短信、日志中的原文。
+
+修正离线测试 DOM 对数组空值的模拟，增加多载波、双连接、确认弹窗及所有页面/展开状态的空值文字回归，并在真实 LuCI 浏览器中验证。保留 v3.0.14 的全部修复与 5 秒信号刷新，不修改模组通信或上网配置。
 
 ## 3.0.14 更新
 

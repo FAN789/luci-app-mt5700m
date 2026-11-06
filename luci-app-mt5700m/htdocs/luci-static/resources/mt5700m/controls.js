@@ -164,7 +164,7 @@ function confirmRun(title, message, args, restartRequired) {
                 ui.addNotification(null, E('p', {}, err.message || String(err)), 'danger');
             });
         }
-    }, _('Apply'))])]);
+    }, _('Apply'))])].filter(function(node) { return node != null; }));
 }
 
 function execChecked(path, args) {

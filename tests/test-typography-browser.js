@@ -60,6 +60,7 @@ const names = ['preview', 'history', 'status', 'connection', 'connection-expande
                         for (const element of document.querySelectorAll('.mt-ui-page *')) {
                             if (['STYLE', 'LINK', 'SCRIPT'].includes(element.tagName) || !element.getClientRects().length) continue;
                             if (![...element.childNodes].some(node => node.nodeType === 3 && node.textContent.trim())) continue;
+                            if ([...element.childNodes].some(node => node.nodeType === 3 && /(?:null|undefined)/.test(node.textContent))) failures.push({class:element.className, problem:'literal empty child'});
                             const style = getComputedStyle(element);
                             if (style.visibility === 'hidden') continue;
                             textElements++;
@@ -75,7 +76,8 @@ const names = ['preview', 'history', 'status', 'connection', 'connection-expande
                             const elements = document.querySelectorAll(selector);
                             if (!elements.length) failures.push({missing: selector});
                             for (const element of elements) {
-                                const style = getComputedStyle(element);
+                                if ([...element.childNodes].some(node => node.nodeType === 3 && /(?:null|undefined)/.test(node.textContent))) failures.push({class:element.className, problem:'literal empty child'});
+                            const style = getComputedStyle(element);
                                 if (style.fontSize !== '14px' || Math.abs(parseFloat(style.lineHeight) - 22.4) > 0.1) {
                                     failures.push({selector, size: style.fontSize, lineHeight: style.lineHeight});
                                 }
